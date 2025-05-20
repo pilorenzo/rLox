@@ -1,0 +1,6 @@
+[package]
+name = "part_one"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]

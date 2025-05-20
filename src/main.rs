@@ -1,0 +1,101 @@
+mod ast_printer;
+mod expression;
+mod parser;
+mod scanner;
+mod token_type;
+use expression::Expr;
+use scanner::*;
+use std::{
+    env,
+    fs::read,
+    io::{self, BufRead, Error, Write},
+    str,
+};
+use token_type::Token;
+use token_type::*;
+
+fn main() -> Result<(), Error> {
+    let args: Vec<String> = env::args().collect();
+    let mut lox = Lox::new();
+    println!("Hello, world!");
+    // let file = args.get(1).unwrap();
+    // println!("file name {}", &file);
+    match args.len() {
+        3.. => Err(Error::new(io::ErrorKind::Other, "Usage: rlox <<script>>")),
+        2 => lox.run_file(args.get(1).unwrap()),
+        _ => lox.run_prompt(),
+    }?;
+    // Ok(())
+    let expression = Expr::Binary {
+        left: Box::new(Expr::Unary {
+            operator: Token::new(TokenType::Minus, "-", Token::empty_literal(), 1),
+            right: Box::new(Expr::Literal {
+                value: Some(LiteralType::Numeric(123.0)),
+            }),
+        }),
+        operator: Token::new(TokenType::Star, "*", Token::empty_literal(), 1),
+        right: Box::new(Expr::Grouping {
+            expression: Box::new(Expr::Literal {
+                value: Some(LiteralType::Numeric(99.0)),
+            }),
+        }),
+    };
+    println!("{}", ast_printer::print_ast(&expression));
+    Ok(())
+}
+
+struct Lox {
+    had_error: bool,
+}
+
+impl Lox {
+    fn new() -> Self {
+        Self { had_error: false }
+    }
+
+    fn run_file(&mut self, path: &str) -> Result<(), Error> {
+        let bytes = read(path)?;
+        self.run(str::from_utf8(&bytes).unwrap());
+        if self.had_error {
+            Err(Error::new(io::ErrorKind::Other, "Error in run_file"))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn run_prompt(&mut self) -> Result<(), Error> {
+        for _ in io::stdin().lock().lines() {
+            print!("> ");
+            io::stdout().flush()?;
+
+            match io::stdin().lock().lines().next() {
+                Some(Ok(input)) => self.run(&input),
+                Some(Err(e)) => eprintln!("Error reading line: {}", e),
+                None => break,
+            }
+            self.had_error = false;
+        }
+        Ok(())
+    }
+
+    fn run(&mut self, source: &str) {
+        let text = source.to_owned();
+        let mut scanner = Scanner::new(self, text);
+        let tokens = scanner.scan_tokens();
+
+        // For now, just print the tokens.
+        for token in tokens {
+            // println!("{:?}", token);
+            println!("{token}");
+        }
+    }
+
+    fn error(&mut self, line: i32, message: &str) {
+        Self::report(self, line, "", message);
+    }
+
+    fn report(&mut self, line: i32, place: &str, message: &str) {
+        eprintln!("[line {line}] Error {place}: {message}");
+        self.had_error = true;
+    }
+}
