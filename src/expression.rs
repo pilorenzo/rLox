@@ -1,5 +1,5 @@
 use crate::token_type::LiteralType;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 use crate::Token;
 
@@ -20,4 +20,26 @@ pub enum Expr {
         operator: Token,
         right: Box<Expr>,
     },
+}
+
+impl Display for Expr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Expr::Binary {
+                left,
+                operator,
+                right,
+            } => write!(f, "Binary {{ {left}, {operator}, {right} }}"),
+
+            Expr::Grouping { expression } => write!(f, "Grouping {{ {expression} }}"),
+            Expr::Literal { value } => {
+                let stringified = match value {
+                    Some(v) => format!("{}", v),
+                    None => "nil".to_owned(),
+                };
+                write!(f, "Literal {{ {stringified} }}")
+            }
+            Expr::Unary { operator, right } => write!(f, "Literal {{ {operator}, {right} }}"),
+        }
+    }
 }

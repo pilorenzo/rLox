@@ -29,7 +29,7 @@ pub enum TokenType {
 
     // Literals
     Identifier,
-    String,
+    Chars,
     Number,
 
     // Keywords
@@ -102,7 +102,7 @@ impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Token {{ \n type: {:?}, lexeme: {:?}, literal: {}, line: {} \n}} ",
+            "Token {{ {:?}, '{}', literal: {}, line: {} }} ",
             self.t_type, self.lexeme, self.literal, self.line
         )
     }

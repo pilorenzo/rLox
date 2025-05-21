@@ -3,7 +3,8 @@ mod expression;
 mod parser;
 mod scanner;
 mod token_type;
-use expression::Expr;
+// use expression::Expr;
+use parser::Parser;
 use scanner::*;
 use std::{
     env,
@@ -18,6 +19,7 @@ fn main() -> Result<(), Error> {
     let args: Vec<String> = env::args().collect();
     let mut lox = Lox::new();
     println!("Hello, world!");
+    println!();
     // let file = args.get(1).unwrap();
     // println!("file name {}", &file);
     match args.len() {
@@ -26,21 +28,21 @@ fn main() -> Result<(), Error> {
         _ => lox.run_prompt(),
     }?;
     // Ok(())
-    let expression = Expr::Binary {
-        left: Box::new(Expr::Unary {
-            operator: Token::new(TokenType::Minus, "-", Token::empty_literal(), 1),
-            right: Box::new(Expr::Literal {
-                value: Some(LiteralType::Numeric(123.0)),
-            }),
-        }),
-        operator: Token::new(TokenType::Star, "*", Token::empty_literal(), 1),
-        right: Box::new(Expr::Grouping {
-            expression: Box::new(Expr::Literal {
-                value: Some(LiteralType::Numeric(99.0)),
-            }),
-        }),
-    };
-    println!("{}", ast_printer::print_ast(&expression));
+    // let expression = Expr::Binary {
+    //     left: Box::new(Expr::Unary {
+    //         operator: Token::new(TokenType::Minus, "-", Token::empty_literal(), 1),
+    //         right: Box::new(Expr::Literal {
+    //             value: Some(LiteralType::Numeric(123.0)),
+    //         }),
+    //     }),
+    //     operator: Token::new(TokenType::Star, "*", Token::empty_literal(), 1),
+    //     right: Box::new(Expr::Grouping {
+    //         expression: Box::new(Expr::Literal {
+    //             value: Some(LiteralType::Numeric(99.0)),
+    //         }),
+    //     }),
+    // };
+    // println!("{}", ast_printer::print_ast(&expression));
     Ok(())
 }
 
@@ -81,13 +83,21 @@ impl Lox {
     fn run(&mut self, source: &str) {
         let text = source.to_owned();
         let mut scanner = Scanner::new(self, text);
-        let tokens = scanner.scan_tokens();
+        let tokens = scanner.scan_tokens().clone();
+        // // For now, just print the tokens.
+        // println!("Read tokens");
+        // for token in &tokens {
+        //     println!("{token}");
+        // }
+        // println!("Read ended");
+        let parse_result = Parser::new(self, tokens).parse();
+        let Ok(expr) = parse_result else {
+            // let error_msg = parse_result.unwrap_err().0;
+            // println!("{error_msg}");
+            return;
+        };
 
-        // For now, just print the tokens.
-        for token in tokens {
-            // println!("{:?}", token);
-            println!("{token}");
-        }
+        println!("{}", ast_printer::print_ast(&expr));
     }
 
     fn error(&mut self, line: i32, message: &str) {
@@ -97,5 +107,14 @@ impl Lox {
     fn report(&mut self, line: i32, place: &str, message: &str) {
         eprintln!("[line {line}] Error {place}: {message}");
         self.had_error = true;
+    }
+
+    fn token_error(&mut self, tok: &Token, msg: &str) {
+        if tok.t_type == TokenType::Eof {
+            self.report(tok.line, "at end", msg);
+        } else {
+            let place = "at '".to_owned() + &tok.lexeme + "'";
+            self.report(tok.line, &place, msg);
+        }
     }
 }

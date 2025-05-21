@@ -160,7 +160,7 @@ impl<'a> Scanner<'a> {
         let val = chars.as_str().to_owned();
         // println!("This is value!!!! {}\n", &value);
 
-        self.add_token_with_literal(TokenType::String, LiteralType::Letters(val));
+        self.add_token_with_literal(TokenType::Chars, LiteralType::Letters(val));
     }
 
     fn scan_number(&mut self) {
