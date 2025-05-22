@@ -1,5 +1,3 @@
-// use std::any::Any;
-
 use std::fmt::{Debug, Display};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -94,7 +92,7 @@ impl Token {
     }
 
     pub fn empty_literal() -> LiteralType {
-        LiteralType::Null(Option::None::<i32>)
+        LiteralType::Null
     }
 }
 
@@ -108,11 +106,11 @@ impl Display for Token {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum LiteralType {
     Numeric(f64),
     Letters(String),
-    Null(Option<i32>),
+    Null,
     Boolean(bool),
 }
 
@@ -121,7 +119,7 @@ impl Display for LiteralType {
         let value = match self {
             Self::Numeric(n) => n.to_string(),
             Self::Letters(s) => s.clone(),
-            Self::Null(_) => "null".to_owned(),
+            Self::Null => "null".to_owned(),
             Self::Boolean(b) => b.to_string(),
         };
         write!(f, "{}", value)

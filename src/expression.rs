@@ -14,7 +14,7 @@ pub enum Expr {
         expression: Box<Expr>,
     },
     Literal {
-        value: Option<LiteralType>,
+        value: LiteralType,
     },
     Unary {
         operator: Token,
@@ -32,13 +32,7 @@ impl Display for Expr {
             } => write!(f, "Binary {{ {left}, {operator}, {right} }}"),
 
             Expr::Grouping { expression } => write!(f, "Grouping {{ {expression} }}"),
-            Expr::Literal { value } => {
-                let stringified = match value {
-                    Some(v) => format!("{}", v),
-                    None => "nil".to_owned(),
-                };
-                write!(f, "Literal {{ {stringified} }}")
-            }
+            Expr::Literal { value } => write!(f, "{value}"),
             Expr::Unary { operator, right } => write!(f, "Literal {{ {operator}, {right} }}"),
         }
     }

@@ -115,19 +115,19 @@ impl<'a> Parser<'a> {
     fn primary(&mut self) -> Result<Expr, ParseError> {
         if self.match_type(vec![False]) {
             Ok(Expr::Literal {
-                value: Some(LiteralType::Boolean(false)),
+                value: LiteralType::Boolean(false),
             })
         } else if self.match_type(vec![True]) {
             Ok(Expr::Literal {
-                value: Some(LiteralType::Boolean(true)),
+                value: LiteralType::Boolean(true),
             })
         } else if self.match_type(vec![Nil]) {
             Ok(Expr::Literal {
-                value: Some(Token::empty_literal()),
+                value: Token::empty_literal(),
             })
         } else if self.match_type(vec![Number, Chars]) {
             Ok(Expr::Literal {
-                value: Some(self.previous().literal),
+                value: self.previous().literal,
             })
         } else if self.match_type(vec![LeftParen]) {
             let expr = self.expression()?;

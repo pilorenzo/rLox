@@ -12,11 +12,7 @@ fn accept(expression: &Expr) -> String {
             right,
         } => parentesize(&operator.lexeme, vec![left, right]),
         Expr::Grouping { expression } => parentesize("group", vec![expression]),
-        Expr::Literal { value } => match value {
-            // Some(lit) => format!("{:?}", lit),
-            Some(lit) => format!("{}", lit),
-            None => "nil".to_owned(),
-        },
+        Expr::Literal { value } => format!("{}", value),
         Expr::Unary { operator, right } => parentesize(&operator.lexeme, vec![right]),
     }
 }
