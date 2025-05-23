@@ -1,4 +1,4 @@
-use crate::{LiteralType, Lox, Token, TokenType};
+use crate::{Literal, Lox, Token, TokenType};
 // use ::std::any::Any;
 use std::char;
 
@@ -127,7 +127,7 @@ impl<'a> Scanner<'a> {
         self.source[start..current].to_owned()
     }
 
-    fn add_token_with_literal(&mut self, t: TokenType, literal: LiteralType) {
+    fn add_token_with_literal(&mut self, t: TokenType, literal: Literal) {
         let text = self.get_source_substring();
         self.tokens.push(Token::new(t, &text, literal, self.line));
     }
@@ -160,7 +160,7 @@ impl<'a> Scanner<'a> {
         let val = chars.as_str().to_owned();
         // println!("This is value!!!! {}\n", &value);
 
-        self.add_token_with_literal(TokenType::Chars, LiteralType::Letters(val));
+        self.add_token_with_literal(TokenType::Chars, Literal::Letters(val));
     }
 
     fn scan_number(&mut self) {
@@ -178,7 +178,7 @@ impl<'a> Scanner<'a> {
         }
 
         let text = self.get_source_substring();
-        let literal = LiteralType::Numeric(text.parse::<f64>().unwrap());
+        let literal = Literal::Numeric(text.parse::<f64>().unwrap());
         self.add_token_with_literal(TokenType::Number, literal)
     }
 

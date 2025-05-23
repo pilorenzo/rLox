@@ -1,4 +1,4 @@
-use crate::token_type::LiteralType;
+use crate::token_type::Literal;
 use std::fmt::{Debug, Display};
 
 use crate::Token;
@@ -14,7 +14,7 @@ pub enum Expr {
         expression: Box<Expr>,
     },
     Literal {
-        value: LiteralType,
+        value: Literal,
     },
     Unary {
         operator: Token,

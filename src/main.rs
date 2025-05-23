@@ -4,6 +4,7 @@ mod interpreter;
 mod parser;
 mod scanner;
 mod token_type;
+use interpreter::{Interpreter, InvalidOperationError};
 // use expression::Expr;
 use parser::Parser;
 use scanner::*;
@@ -49,18 +50,24 @@ fn main() -> Result<(), Error> {
 
 struct Lox {
     had_error: bool,
+    had_runtime_error: bool,
 }
 
 impl Lox {
     fn new() -> Self {
-        Self { had_error: false }
+        Self {
+            had_error: false,
+            had_runtime_error: false,
+        }
     }
 
     fn run_file(&mut self, path: &str) -> Result<(), Error> {
         let bytes = read(path)?;
         self.run(str::from_utf8(&bytes).unwrap());
         if self.had_error {
-            Err(Error::new(io::ErrorKind::Other, "Error in run_file"))
+            std::process::exit(65);
+        } else if self.had_runtime_error {
+            std::process::exit(70);
         } else {
             Ok(())
         }
@@ -95,10 +102,13 @@ impl Lox {
         let Ok(expr) = parse_result else {
             // let error_msg = parse_result.unwrap_err().0;
             // println!("{error_msg}");
+            self.had_error = true;
             return;
         };
 
-        println!("{}", ast_printer::print_ast(&expr));
+        Interpreter::interpret(self, &expr);
+        // println!("{}", ast_printer::print_ast(&expr));
+        //
     }
 
     fn error(&mut self, line: i32, message: &str) {
@@ -117,5 +127,10 @@ impl Lox {
             let place = "at '".to_owned() + &tok.lexeme + "'";
             self.report(tok.line, &place, msg);
         }
+    }
+
+    pub fn runtime_error(&mut self, error: InvalidOperationError) {
+        eprintln!("{} \n[line {}]", error.msg, error.line);
+        self.had_runtime_error = true;
     }
 }

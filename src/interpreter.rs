@@ -1,17 +1,31 @@
-use crate::{ast_printer, expression::Expr, LiteralType, TokenType};
+use crate::{ast_printer, expression::Expr, Literal, Lox, TokenType};
 
-struct InvalidOperationError(String);
+pub struct InvalidOperationError {
+    pub line: i32,
+    pub msg: String,
+}
 
-fn visit(expression: &Expr) -> Result<LiteralType, InvalidOperationError> {
+pub struct Interpreter;
+impl Interpreter {
+    pub fn interpret(lox: &mut Lox, expr: &Expr) {
+        // let value = visit(expr)?;
+        match visit(expr) {
+            Ok(value) => println!("{value}"),
+            Err(error) => lox.runtime_error(error),
+        }
+    }
+}
+
+fn visit(expression: &Expr) -> Result<Literal, InvalidOperationError> {
     let literal = match expression {
         Expr::Literal { value } => value.clone(),
         Expr::Grouping { expression } => visit(expression)?,
         Expr::Unary { operator, right } => {
             let right = visit(right)?;
             match operator.t_type {
-                TokenType::Bang => LiteralType::Boolean(!is_truthy(right)),
-                TokenType::Minus => LiteralType::Numeric(-to_num(right)?),
-                _ => LiteralType::Null,
+                TokenType::Bang => Literal::Boolean(!is_truthy(right)),
+                TokenType::Minus => Literal::Numeric(-to_num(operator.line, right)?),
+                _ => Literal::Null,
             }
         }
         Expr::Binary {
@@ -20,51 +34,52 @@ fn visit(expression: &Expr) -> Result<LiteralType, InvalidOperationError> {
             right,
         } => {
             let (right, left) = (visit(right)?, visit(left)?);
+            let l = operator.line;
             match operator.t_type {
-                TokenType::Greater => LiteralType::Boolean(to_num(left)? > to_num(right)?),
-                TokenType::GreaterEqual => LiteralType::Boolean(to_num(left)? >= to_num(right)?),
-                TokenType::Less => LiteralType::Boolean(to_num(left)? < to_num(right)?),
-                TokenType::LessEqual => LiteralType::Boolean(to_num(left)? <= to_num(right)?),
+                TokenType::Greater => Literal::Boolean(to_num(l, left)? > to_num(l, right)?),
+                TokenType::GreaterEqual => Literal::Boolean(to_num(l, left)? >= to_num(l, right)?),
+                TokenType::Less => Literal::Boolean(to_num(l, left)? < to_num(l, right)?),
+                TokenType::LessEqual => Literal::Boolean(to_num(l, left)? <= to_num(l, right)?),
 
-                TokenType::EqualEqual => LiteralType::Boolean(left == right),
-                TokenType::BangEqual => LiteralType::Boolean(left != right),
+                TokenType::EqualEqual => Literal::Boolean(left == right),
+                TokenType::BangEqual => Literal::Boolean(left != right),
 
-                TokenType::Minus => LiteralType::Numeric(to_num(left)? - to_num(right)?),
-                TokenType::Slash => LiteralType::Numeric(to_num(left)? / to_num(right)?),
-                TokenType::Star => LiteralType::Numeric(to_num(left)? * to_num(right)?),
+                TokenType::Minus => Literal::Numeric(to_num(l, left)? - to_num(l, right)?),
+                TokenType::Slash => Literal::Numeric(to_num(l, left)? / to_num(l, right)?),
+                TokenType::Star => Literal::Numeric(to_num(l, left)? * to_num(l, right)?),
                 TokenType::Plus => match (&left, &right) {
-                    (LiteralType::Numeric(l), LiteralType::Numeric(r)) => {
-                        LiteralType::Numeric(l + r)
-                    }
-                    (LiteralType::Letters(l), LiteralType::Letters(r)) => {
-                        LiteralType::Letters(format!("{l}{r}"))
+                    (Literal::Numeric(l), Literal::Numeric(r)) => Literal::Numeric(l + r),
+                    (Literal::Letters(l), Literal::Letters(r)) => {
+                        Literal::Letters(format!("{l}{r}"))
                     }
                     _ => {
-                        return Err(InvalidOperationError(format!(
-                            "Can't add {right} to {left}"
-                        )))
+                        return Err(InvalidOperationError {
+                            line: l,
+                            msg: format!("Can't add {right} to {left}"),
+                        })
                     }
-                }, // LiteralType::Numeric(to_num(left)? * to_num(right)?),
-                _ => LiteralType::Null,
+                },
+                _ => Literal::Null,
             }
         }
     };
     Ok(literal)
 }
 
-fn is_truthy(value: LiteralType) -> bool {
+fn is_truthy(value: Literal) -> bool {
     match value {
-        LiteralType::Null => false,
-        LiteralType::Boolean(b) => b,
+        Literal::Null => false,
+        Literal::Boolean(b) => b,
         _ => true,
     }
 }
 
-fn to_num(lit: LiteralType) -> Result<f64, InvalidOperationError> {
+fn to_num(line: i32, lit: Literal) -> Result<f64, InvalidOperationError> {
     match lit {
-        LiteralType::Numeric(n) => Ok(n),
-        _ => Err(InvalidOperationError(format!(
-            "Can't cast {lit} to numeric"
-        ))),
+        Literal::Numeric(n) => Ok(n),
+        _ => Err(InvalidOperationError {
+            line,
+            msg: format!("Can't cast {lit} to numeric"),
+        }),
     }
 }

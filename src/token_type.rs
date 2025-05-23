@@ -55,12 +55,12 @@ pub enum TokenType {
 pub struct Token {
     pub t_type: TokenType,
     pub lexeme: String,
-    pub literal: LiteralType,
+    pub literal: Literal,
     pub line: i32,
 }
 
 impl Token {
-    pub fn new(t: TokenType, lex: &str, lit: LiteralType, line: i32) -> Self {
+    pub fn new(t: TokenType, lex: &str, lit: Literal, line: i32) -> Self {
         Self {
             t_type: t,
             lexeme: lex.to_owned(),
@@ -91,8 +91,8 @@ impl Token {
         }
     }
 
-    pub fn empty_literal() -> LiteralType {
-        LiteralType::Null
+    pub fn empty_literal() -> Literal {
+        Literal::Null
     }
 }
 
@@ -107,19 +107,19 @@ impl Display for Token {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum LiteralType {
+pub enum Literal {
     Numeric(f64),
     Letters(String),
     Null,
     Boolean(bool),
 }
 
-impl Display for LiteralType {
+impl Display for Literal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let value = match self {
             Self::Numeric(n) => n.to_string(),
             Self::Letters(s) => s.clone(),
-            Self::Null => "null".to_owned(),
+            Self::Null => "nil".to_owned(),
             Self::Boolean(b) => b.to_string(),
         };
         write!(f, "{}", value)

@@ -1,5 +1,5 @@
 use crate::token_type::TokenType::*;
-use crate::{LiteralType, Lox};
+use crate::{Literal, Lox};
 // {
 //     Bang, BangEqual, EqualEqual, False, Greater, GreaterEqual, LeftParen, Less, LessEqual, Minus,
 //     Nil, Number, Plus, RightParen, Slash, Star, String, True,
@@ -115,11 +115,11 @@ impl<'a> Parser<'a> {
     fn primary(&mut self) -> Result<Expr, ParseError> {
         if self.match_type(vec![False]) {
             Ok(Expr::Literal {
-                value: LiteralType::Boolean(false),
+                value: Literal::Boolean(false),
             })
         } else if self.match_type(vec![True]) {
             Ok(Expr::Literal {
-                value: LiteralType::Boolean(true),
+                value: Literal::Boolean(true),
             })
         } else if self.match_type(vec![Nil]) {
             Ok(Expr::Literal {
