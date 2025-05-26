@@ -1,3 +1,4 @@
+use crate::statement::Stmt;
 use crate::token_type::TokenType::*;
 use crate::{Literal, Lox};
 // {
@@ -23,8 +24,37 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> Result<Expr, ParseError> {
-        self.expression()
+    pub fn parse(&mut self) -> Result<Vec<Stmt>, ParseError> {
+        let mut statements = Vec::<Stmt>::new();
+        while !self.is_at_end() {
+            statements.push(self.statement()?);
+        }
+        Ok(statements)
+        // self.expression();
+    }
+
+    fn statement(&mut self) -> Result<Stmt, ParseError> {
+        if self.match_type(vec![Print]) {
+            self.print_statement()
+        } else {
+            self.expression_statement()
+        }
+    }
+
+    fn print_statement(&mut self) -> Result<Stmt, ParseError> {
+        let expr = self.expression()?;
+        self.consume(Semicolon, "Excpect ';' after value.".to_owned());
+        Ok(Stmt::Print {
+            expression: Box::new(expr),
+        })
+    }
+
+    fn expression_statement(&mut self) -> Result<Stmt, ParseError> {
+        let expr = self.expression()?;
+        self.consume(Semicolon, "Excpect ';' after expression.".to_owned());
+        Ok(Stmt::Expression {
+            expression: Box::new(expr),
+        })
     }
 
     fn expression(&mut self) -> Result<Expr, ParseError> {

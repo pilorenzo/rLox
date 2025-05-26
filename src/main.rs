@@ -3,6 +3,7 @@ mod expression;
 mod interpreter;
 mod parser;
 mod scanner;
+mod statement;
 mod token_type;
 use interpreter::{Interpreter, InvalidOperationError};
 // use expression::Expr;
@@ -99,14 +100,14 @@ impl Lox {
         // }
         // println!("Read ended");
         let parse_result = Parser::new(self, tokens).parse();
-        let Ok(expr) = parse_result else {
+        let Ok(statements) = parse_result else {
             // let error_msg = parse_result.unwrap_err().0;
             // println!("{error_msg}");
             self.had_error = true;
             return;
         };
 
-        Interpreter::interpret(self, &expr);
+        Interpreter::interpret(self, &statements);
         // println!("{}", ast_printer::print_ast(&expr));
         //
     }

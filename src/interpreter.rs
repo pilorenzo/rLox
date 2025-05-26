@@ -1,4 +1,4 @@
-use crate::{ast_printer, expression::Expr, Literal, Lox, TokenType};
+use crate::{ast_printer, expression::Expr, statement::Stmt, Literal, Lox, TokenType};
 
 pub struct InvalidOperationError {
     pub line: i32,
@@ -7,21 +7,25 @@ pub struct InvalidOperationError {
 
 pub struct Interpreter;
 impl Interpreter {
-    pub fn interpret(lox: &mut Lox, expr: &Expr) {
-        // let value = visit(expr)?;
-        match visit(expr) {
-            Ok(value) => println!("{value}"),
-            Err(error) => lox.runtime_error(error),
+    pub fn interpret(lox: &mut Lox, statements: &Vec<Stmt>) {
+        // match visit_expression(expr) {
+        //     Ok(value) => println!("{value}"),
+        //     Err(error) => lox.runtime_error(error),
+        // }
+        for stmt in statements {
+            if let Err(error) = visit_statement(stmt) {
+                lox.runtime_error(error)
+            }
         }
     }
 }
 
-fn visit(expression: &Expr) -> Result<Literal, InvalidOperationError> {
+fn visit_expression(expression: &Expr) -> Result<Literal, InvalidOperationError> {
     let literal = match expression {
         Expr::Literal { value } => value.clone(),
-        Expr::Grouping { expression } => visit(expression)?,
+        Expr::Grouping { expression } => visit_expression(expression)?,
         Expr::Unary { operator, right } => {
-            let right = visit(right)?;
+            let right = visit_expression(right)?;
             match operator.t_type {
                 TokenType::Bang => Literal::Boolean(!is_truthy(right)),
                 TokenType::Minus => Literal::Numeric(-to_num(operator.line, right)?),
@@ -33,7 +37,7 @@ fn visit(expression: &Expr) -> Result<Literal, InvalidOperationError> {
             operator,
             right,
         } => {
-            let (right, left) = (visit(right)?, visit(left)?);
+            let (right, left) = (visit_expression(right)?, visit_expression(left)?);
             let l = operator.line;
             match operator.t_type {
                 TokenType::Greater => Literal::Boolean(to_num(l, left)? > to_num(l, right)?),
@@ -82,4 +86,17 @@ fn to_num(line: i32, lit: Literal) -> Result<f64, InvalidOperationError> {
             msg: format!("Can't cast {lit} to numeric"),
         }),
     }
+}
+
+fn visit_statement(stmt: &Stmt) -> Result<(), InvalidOperationError> {
+    match stmt {
+        Stmt::Expression { expression } => {
+            visit_expression(expression)?;
+        }
+        Stmt::Print { expression } => match visit_expression(expression) {
+            Ok(value) => println!("{value}"),
+            Err(e) => return Err(e),
+        },
+    }
+    Ok(())
 }
