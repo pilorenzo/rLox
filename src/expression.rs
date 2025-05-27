@@ -3,7 +3,7 @@ use std::fmt::{Debug, Display};
 
 use crate::Token;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     Binary {
         left: Box<Expr>,
@@ -20,6 +20,9 @@ pub enum Expr {
         operator: Token,
         right: Box<Expr>,
     },
+    Variable {
+        name: Token,
+    },
 }
 
 impl Display for Expr {
@@ -34,6 +37,20 @@ impl Display for Expr {
             Expr::Grouping { expression } => write!(f, "Grouping {{ {expression} }}"),
             Expr::Literal { value } => write!(f, "{value}"),
             Expr::Unary { operator, right } => write!(f, "Literal {{ {operator}, {right} }}"),
+            Expr::Variable { name } => write!(f, "Variable {name}"),
+        }
+    }
+}
+
+impl Expr {
+    pub fn is_null(&self) -> bool {
+        if let Expr::Literal { value } = self {
+            match value {
+                Literal::Null => true,
+                _ => false,
+            }
+        } else {
+            false
         }
     }
 }

@@ -1,9 +1,14 @@
-use crate::{ast_printer, expression::Expr, statement::Stmt, Literal, Lox, TokenType};
+use crate::{environment::Environment, expression::Expr, statement::Stmt, Literal, Lox, TokenType};
 
-pub struct InvalidOperationError {
-    pub line: i32,
-    pub msg: String,
+pub enum RuntimeError {
+    InvalidOperationError { line: i32, msg: String },
+    IdentifierError { line: i32, msg: String },
 }
+// pub struct
+// InvalidOperationError {
+//     pub line: i32,
+//     pub msg: String,
+// }
 
 pub struct Interpreter;
 impl Interpreter {
@@ -12,20 +17,22 @@ impl Interpreter {
         //     Ok(value) => println!("{value}"),
         //     Err(error) => lox.runtime_error(error),
         // }
+        let mut env = Environment::new();
         for stmt in statements {
-            if let Err(error) = visit_statement(stmt) {
+            if let Err(error) = visit_statement(stmt, &mut env) {
                 lox.runtime_error(error)
             }
         }
     }
 }
 
-fn visit_expression(expression: &Expr) -> Result<Literal, InvalidOperationError> {
+fn visit_expression(expression: &Expr, env: &Environment) -> Result<Literal, RuntimeError> {
     let literal = match expression {
+        Expr::Variable { name } => env.get(name.clone())?,
         Expr::Literal { value } => value.clone(),
-        Expr::Grouping { expression } => visit_expression(expression)?,
+        Expr::Grouping { expression } => visit_expression(expression, env)?,
         Expr::Unary { operator, right } => {
-            let right = visit_expression(right)?;
+            let right = visit_expression(right, env)?;
             match operator.t_type {
                 TokenType::Bang => Literal::Boolean(!is_truthy(right)),
                 TokenType::Minus => Literal::Numeric(-to_num(operator.line, right)?),
@@ -37,7 +44,7 @@ fn visit_expression(expression: &Expr) -> Result<Literal, InvalidOperationError>
             operator,
             right,
         } => {
-            let (right, left) = (visit_expression(right)?, visit_expression(left)?);
+            let (right, left) = (visit_expression(right, env)?, visit_expression(left, env)?);
             let l = operator.line;
             match operator.t_type {
                 TokenType::Greater => Literal::Boolean(to_num(l, left)? > to_num(l, right)?),
@@ -57,7 +64,7 @@ fn visit_expression(expression: &Expr) -> Result<Literal, InvalidOperationError>
                         Literal::Letters(format!("{l}{r}"))
                     }
                     _ => {
-                        return Err(InvalidOperationError {
+                        return Err(RuntimeError::InvalidOperationError {
                             line: l,
                             msg: format!("Can't add {right} to {left}"),
                         })
@@ -78,25 +85,34 @@ fn is_truthy(value: Literal) -> bool {
     }
 }
 
-fn to_num(line: i32, lit: Literal) -> Result<f64, InvalidOperationError> {
+fn to_num(line: i32, lit: Literal) -> Result<f64, RuntimeError> {
     match lit {
         Literal::Numeric(n) => Ok(n),
-        _ => Err(InvalidOperationError {
+        _ => Err(RuntimeError::InvalidOperationError {
             line,
             msg: format!("Can't cast {lit} to numeric"),
         }),
     }
 }
 
-fn visit_statement(stmt: &Stmt) -> Result<(), InvalidOperationError> {
+fn visit_statement(stmt: &Stmt, env: &mut Environment) -> Result<(), RuntimeError> {
     match stmt {
         Stmt::Expression { expression } => {
-            visit_expression(expression)?;
+            visit_expression(expression, env)?;
         }
-        Stmt::Print { expression } => match visit_expression(expression) {
+        Stmt::Print { expression } => match visit_expression(expression, env) {
             Ok(value) => println!("{value}"),
             Err(e) => return Err(e),
         },
+        Stmt::Var { name, initializer } => {
+            let val = if initializer.is_null() {
+                Literal::Null
+                // visit_expression(initializer)?;
+            } else {
+                visit_expression(initializer, env)?
+            };
+            env.define(name.lexeme.clone(), val);
+        }
     }
     Ok(())
 }

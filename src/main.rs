@@ -1,11 +1,12 @@
 mod ast_printer;
+mod environment;
 mod expression;
 mod interpreter;
 mod parser;
 mod scanner;
 mod statement;
 mod token_type;
-use interpreter::{Interpreter, InvalidOperationError};
+use interpreter::{Interpreter, RuntimeError};
 // use expression::Expr;
 use parser::Parser;
 use scanner::*;
@@ -130,8 +131,12 @@ impl Lox {
         }
     }
 
-    pub fn runtime_error(&mut self, error: InvalidOperationError) {
-        eprintln!("{} \n[line {}]", error.msg, error.line);
+    pub fn runtime_error(&mut self, error: RuntimeError) {
+        let (msg, line) = match error {
+            RuntimeError::InvalidOperationError { line, msg } => (msg, line),
+            RuntimeError::IdentifierError { line, msg } => (msg, line),
+        };
+        eprintln!("{} \n[line {}]", msg, line);
         self.had_runtime_error = true;
     }
 }

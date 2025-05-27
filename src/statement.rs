@@ -1,4 +1,4 @@
-use crate::{expression::Expr, token_type::Literal};
+use crate::expression::Expr;
 use std::fmt::{Debug, Display};
 
 use crate::Token;
@@ -7,6 +7,7 @@ use crate::Token;
 pub enum Stmt {
     Expression { expression: Box<Expr> },
     Print { expression: Box<Expr> },
+    Var { name: Token, initializer: Box<Expr> },
 }
 
 impl Display for Stmt {
@@ -14,6 +15,7 @@ impl Display for Stmt {
         match self {
             Stmt::Expression { expression } => write!(f, "Expression {{ {expression} }}"),
             Stmt::Print { expression } => write!(f, "Print {{ {expression} }}"),
+            Stmt::Var { name, initializer } => write!(f, "var {name} {{ {initializer} }}"),
         }
     }
 }

@@ -27,10 +27,37 @@ impl<'a> Parser<'a> {
     pub fn parse(&mut self) -> Result<Vec<Stmt>, ParseError> {
         let mut statements = Vec::<Stmt>::new();
         while !self.is_at_end() {
-            statements.push(self.statement()?);
+            statements.push(self.declaration()?);
         }
         Ok(statements)
         // self.expression();
+    }
+
+    fn declaration(&mut self) -> Result<Stmt, ParseError> {
+        if self.match_type(vec![Var]) {
+            self.var_declaration()
+        } else {
+            self.statement()
+        }
+    }
+
+    fn var_declaration(&mut self) -> Result<Stmt, ParseError> {
+        let name = self.consume(Identifier, "Expect variable name".to_owned())?;
+        let initializer = if self.match_type(vec![Equal]) {
+            self.expression()?
+        } else {
+            Expr::Literal {
+                value: Literal::Null,
+            }
+        };
+
+        self.consume(
+            Semicolon,
+            "Expect ';' after variable declaration.".to_owned(),
+        )?;
+
+        let initializer = Box::new(initializer);
+        Ok(Stmt::Var { name, initializer })
     }
 
     fn statement(&mut self) -> Result<Stmt, ParseError> {
@@ -43,7 +70,7 @@ impl<'a> Parser<'a> {
 
     fn print_statement(&mut self) -> Result<Stmt, ParseError> {
         let expr = self.expression()?;
-        self.consume(Semicolon, "Excpect ';' after value.".to_owned());
+        self.consume(Semicolon, "Excpect ';' after value.".to_owned())?;
         Ok(Stmt::Print {
             expression: Box::new(expr),
         })
@@ -51,7 +78,7 @@ impl<'a> Parser<'a> {
 
     fn expression_statement(&mut self) -> Result<Stmt, ParseError> {
         let expr = self.expression()?;
-        self.consume(Semicolon, "Excpect ';' after expression.".to_owned());
+        self.consume(Semicolon, "Excpect ';' after expression.".to_owned())?;
         Ok(Stmt::Expression {
             expression: Box::new(expr),
         })
@@ -159,6 +186,10 @@ impl<'a> Parser<'a> {
             Ok(Expr::Literal {
                 value: self.previous().literal,
             })
+        } else if self.match_type(vec![Identifier]) {
+            Ok(Expr::Variable {
+                name: self.previous(),
+            })
         } else if self.match_type(vec![LeftParen]) {
             let expr = self.expression()?;
             self.consume(RightParen, "Expect ')' after expression.".to_owned())?;
@@ -170,12 +201,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn consume(&mut self, token_type: TokenType, msg: String) -> Result<(), ParseError> {
+    fn consume(&mut self, token_type: TokenType, msg: String) -> Result<Token, ParseError> {
         if self.check(token_type) {
-            self.advance();
-            return Ok(());
+            // self.advance();
+            Ok(self.advance())
+        } else {
+            Err(self.error(self.peek(), msg))
         }
-        Err(self.error(self.peek(), msg))
     }
 
     fn error(&mut self, tok: Token, msg: String) -> ParseError {
@@ -205,11 +237,11 @@ impl<'a> Parser<'a> {
         self.peek().t_type == token_type
     }
 
-    fn advance(&mut self) {
+    fn advance(&mut self) -> Token {
         if !self.is_at_end() {
             self.current += 1;
         }
-        self.previous();
+        self.previous()
     }
 
     fn is_at_end(&self) -> bool {
