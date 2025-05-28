@@ -135,6 +135,7 @@ impl Lox {
         let (msg, line) = match error {
             RuntimeError::InvalidOperationError { line, msg } => (msg, line),
             RuntimeError::IdentifierError { line, msg } => (msg, line),
+            RuntimeError::UndefinedVariable { line, msg } => (msg, line),
         };
         eprintln!("{} \n[line {}]", msg, line);
         self.had_runtime_error = true;

@@ -23,6 +23,10 @@ pub enum Expr {
     Variable {
         name: Token,
     },
+    Assignment {
+        name: Token,
+        value: Box<Expr>,
+    },
 }
 
 impl Display for Expr {
@@ -38,6 +42,7 @@ impl Display for Expr {
             Expr::Literal { value } => write!(f, "{value}"),
             Expr::Unary { operator, right } => write!(f, "Literal {{ {operator}, {right} }}"),
             Expr::Variable { name } => write!(f, "Variable {name}"),
+            Expr::Assignment { name, value } => write!(f, "Assignment of {value} to {name}"),
         }
     }
 }

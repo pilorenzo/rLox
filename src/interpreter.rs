@@ -3,6 +3,7 @@ use crate::{environment::Environment, expression::Expr, statement::Stmt, Literal
 pub enum RuntimeError {
     InvalidOperationError { line: i32, msg: String },
     IdentifierError { line: i32, msg: String },
+    UndefinedVariable { line: i32, msg: String },
 }
 // pub struct
 // InvalidOperationError {
@@ -26,8 +27,13 @@ impl Interpreter {
     }
 }
 
-fn visit_expression(expression: &Expr, env: &Environment) -> Result<Literal, RuntimeError> {
+fn visit_expression(expression: &Expr, env: &mut Environment) -> Result<Literal, RuntimeError> {
     let literal = match expression {
+        Expr::Assignment { name, value } => {
+            let value = visit_expression(value, env)?;
+            env.assign(name.clone(), value.clone())?;
+            value
+        }
         Expr::Variable { name } => env.get(name.clone())?,
         Expr::Literal { value } => value.clone(),
         Expr::Grouping { expression } => visit_expression(expression, env)?,

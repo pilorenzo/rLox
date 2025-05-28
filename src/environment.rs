@@ -21,4 +21,17 @@ impl Environment {
             })
         }
     }
+    pub fn assign(&mut self, token: Token, value: Literal) -> Result<(), RuntimeError> {
+        let name = token.lexeme;
+        match self.0.get_mut(&name) {
+            Some(v) => {
+                *v = value;
+                Ok(())
+            }
+            None => Err(RuntimeError::UndefinedVariable {
+                line: token.line,
+                msg: format!("Trying to assign to an undefined variable '{name}'."),
+            }),
+        }
+    }
 }

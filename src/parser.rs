@@ -13,7 +13,7 @@ pub struct Parser<'a> {
     pub current: usize,
 }
 
-pub struct ParseError(pub String);
+pub struct ParseError(pub Token, pub String);
 
 impl<'a> Parser<'a> {
     pub fn new(lox: &'a mut Lox, tokens: Vec<Token>) -> Self {
@@ -85,7 +85,23 @@ impl<'a> Parser<'a> {
     }
 
     fn expression(&mut self) -> Result<Expr, ParseError> {
-        self.equality()
+        self.assignment()
+    }
+
+    fn assignment(&mut self) -> Result<Expr, ParseError> {
+        let expr = self.equality()?;
+        if self.match_type(vec![Equal]) {
+            let equals = self.previous();
+            let value = Box::new(self.assignment()?);
+            if let Expr::Variable { name } = expr {
+                Ok(Expr::Assignment { name, value })
+            } else {
+                /* in lox there is no throw in this case, the error is only reported */
+                Err(self.error(equals, "Invalid assignment target".to_owned()))
+            }
+        } else {
+            Ok(expr)
+        }
     }
 
     fn equality(&mut self) -> Result<Expr, ParseError> {
@@ -216,7 +232,7 @@ impl<'a> Parser<'a> {
          *  In Lox it is returned a parse error here,
          *  which is a static class that extends RuntimeException
          */
-        ParseError(msg)
+        ParseError(tok, msg)
     }
 
     fn match_type(&mut self, tokens: Vec<TokenType>) -> bool {
