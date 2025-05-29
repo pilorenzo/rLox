@@ -1,19 +1,33 @@
 use crate::{interpreter::RuntimeError, token_type::Token, Literal};
 use std::collections::HashMap;
 
-pub struct Environment(HashMap<String, Literal>);
+pub struct Environment {
+    dict: HashMap<String, Literal>,
+    pub outer: Option<Box<Environment>>,
+}
 
 impl Environment {
-    pub fn new() -> Self {
-        Environment(HashMap::<String, Literal>::new())
+    pub fn global() -> Self {
+        Environment {
+            dict: HashMap::<String, Literal>::new(),
+            outer: None,
+        }
+    }
+    pub fn new(outer: Environment) -> Self {
+        Environment {
+            dict: HashMap::<String, Literal>::new(),
+            outer: Some(Box::new(outer)),
+        }
     }
     pub fn define(&mut self, name: String, value: Literal) {
-        self.0.insert(name, value);
+        self.dict.insert(name, value);
     }
     pub fn get(&self, token: Token) -> Result<Literal, RuntimeError> {
-        let name = token.lexeme;
-        if self.0.contains_key(&name) {
-            Ok(self.0[&name].clone())
+        let name = &token.lexeme;
+        if self.dict.contains_key(name) {
+            Ok(self.dict[name].clone())
+        } else if let Some(outer) = &self.outer {
+            outer.get(token)
         } else {
             Err(RuntimeError::IdentifierError {
                 line: token.line,
@@ -22,16 +36,18 @@ impl Environment {
         }
     }
     pub fn assign(&mut self, token: Token, value: Literal) -> Result<(), RuntimeError> {
-        let name = token.lexeme;
-        match self.0.get_mut(&name) {
-            Some(v) => {
-                *v = value;
-                Ok(())
-            }
-            None => Err(RuntimeError::UndefinedVariable {
+        let name = &token.lexeme;
+
+        if let Some(v) = self.dict.get_mut(name) {
+            *v = value;
+            Ok(())
+        } else if let Some(outer) = &mut self.outer {
+            outer.assign(token, value)
+        } else {
+            Err(RuntimeError::UndefinedVariable {
                 line: token.line,
                 msg: format!("Trying to assign to an undefined variable '{name}'."),
-            }),
+            })
         }
     }
 }

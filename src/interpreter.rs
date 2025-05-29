@@ -5,23 +5,18 @@ pub enum RuntimeError {
     IdentifierError { line: i32, msg: String },
     UndefinedVariable { line: i32, msg: String },
 }
-// pub struct
-// InvalidOperationError {
-//     pub line: i32,
-//     pub msg: String,
-// }
 
 pub struct Interpreter;
 impl Interpreter {
     pub fn interpret(lox: &mut Lox, statements: &Vec<Stmt>) {
-        // match visit_expression(expr) {
-        //     Ok(value) => println!("{value}"),
-        //     Err(error) => lox.runtime_error(error),
-        // }
-        let mut env = Environment::new();
+        let mut env = Environment::global();
         for stmt in statements {
-            if let Err(error) = visit_statement(stmt, &mut env) {
-                lox.runtime_error(error)
+            match visit_statement(stmt, env) {
+                Ok(e) => env = e,
+                Err(error) => {
+                    lox.runtime_error(error);
+                    return;
+                }
             }
         }
     }
@@ -101,24 +96,30 @@ fn to_num(line: i32, lit: Literal) -> Result<f64, RuntimeError> {
     }
 }
 
-fn visit_statement(stmt: &Stmt, env: &mut Environment) -> Result<(), RuntimeError> {
+fn visit_statement(stmt: &Stmt, mut env: Environment) -> Result<Environment, RuntimeError> {
     match stmt {
         Stmt::Expression { expression } => {
-            visit_expression(expression, env)?;
+            visit_expression(expression, &mut env)?;
         }
-        Stmt::Print { expression } => match visit_expression(expression, env) {
+        Stmt::Print { expression } => match visit_expression(expression, &mut env) {
             Ok(value) => println!("{value}"),
             Err(e) => return Err(e),
         },
         Stmt::Var { name, initializer } => {
             let val = if initializer.is_null() {
                 Literal::Null
-                // visit_expression(initializer)?;
             } else {
-                visit_expression(initializer, env)?
+                visit_expression(initializer, &mut env)?
             };
             env.define(name.lexeme.clone(), val);
         }
+        Stmt::Block { statements } => {
+            let mut inner_env = Environment::new(env);
+            for statement in statements {
+                inner_env = visit_statement(statement, inner_env)?;
+            }
+            env = *inner_env.outer.unwrap();
+        }
     }
-    Ok(())
+    Ok(env)
 }

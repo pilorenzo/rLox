@@ -8,6 +8,7 @@ pub enum Stmt {
     Expression { expression: Box<Expr> },
     Print { expression: Box<Expr> },
     Var { name: Token, initializer: Box<Expr> },
+    Block { statements: Vec<Stmt> },
 }
 
 impl Display for Stmt {
@@ -16,6 +17,7 @@ impl Display for Stmt {
             Stmt::Expression { expression } => write!(f, "Expression {{ {expression} }}"),
             Stmt::Print { expression } => write!(f, "Print {{ {expression} }}"),
             Stmt::Var { name, initializer } => write!(f, "var {name} {{ {initializer} }}"),
+            Stmt::Block { statements } => write!(f, "Block {{ {statements:?} }}"),
         }
     }
 }

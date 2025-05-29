@@ -42,7 +42,7 @@ impl<'a> Parser<'a> {
     }
 
     fn var_declaration(&mut self) -> Result<Stmt, ParseError> {
-        let name = self.consume(Identifier, "Expect variable name".to_owned())?;
+        let name = self.consume(Identifier, "Expect variable name")?;
         let initializer = if self.match_type(vec![Equal]) {
             self.expression()?
         } else {
@@ -51,10 +51,7 @@ impl<'a> Parser<'a> {
             }
         };
 
-        self.consume(
-            Semicolon,
-            "Expect ';' after variable declaration.".to_owned(),
-        )?;
+        self.consume(Semicolon, "Expect ';' after variable declaration.")?;
 
         let initializer = Box::new(initializer);
         Ok(Stmt::Var { name, initializer })
@@ -63,14 +60,27 @@ impl<'a> Parser<'a> {
     fn statement(&mut self) -> Result<Stmt, ParseError> {
         if self.match_type(vec![Print]) {
             self.print_statement()
+        } else if self.match_type(vec![LeftBrace]) {
+            Ok(Stmt::Block {
+                statements: self.block()?,
+            })
         } else {
             self.expression_statement()
         }
     }
 
+    fn block(&mut self) -> Result<Vec<Stmt>, ParseError> {
+        let mut stmts: Vec<Stmt> = vec![];
+        while !self.check(RightBrace) && !self.is_at_end() {
+            stmts.push(self.declaration()?);
+        }
+        self.consume(RightBrace, "Expect");
+        Ok(stmts)
+    }
+
     fn print_statement(&mut self) -> Result<Stmt, ParseError> {
         let expr = self.expression()?;
-        self.consume(Semicolon, "Excpect ';' after value.".to_owned())?;
+        self.consume(Semicolon, "Excpect ';' after value.")?;
         Ok(Stmt::Print {
             expression: Box::new(expr),
         })
@@ -78,7 +88,7 @@ impl<'a> Parser<'a> {
 
     fn expression_statement(&mut self) -> Result<Stmt, ParseError> {
         let expr = self.expression()?;
-        self.consume(Semicolon, "Excpect ';' after expression.".to_owned())?;
+        self.consume(Semicolon, "Excpect ';' after expression.")?;
         Ok(Stmt::Expression {
             expression: Box::new(expr),
         })
@@ -208,7 +218,7 @@ impl<'a> Parser<'a> {
             })
         } else if self.match_type(vec![LeftParen]) {
             let expr = self.expression()?;
-            self.consume(RightParen, "Expect ')' after expression.".to_owned())?;
+            self.consume(RightParen, "Expect ')' after expression.")?;
             Ok(Expr::Grouping {
                 expression: Box::new(expr),
             })
@@ -217,12 +227,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn consume(&mut self, token_type: TokenType, msg: String) -> Result<Token, ParseError> {
+    fn consume(&mut self, token_type: TokenType, msg: &str) -> Result<Token, ParseError> {
         if self.check(token_type) {
             // self.advance();
             Ok(self.advance())
         } else {
-            Err(self.error(self.peek(), msg))
+            Err(self.error(self.peek(), msg.to_owned()))
         }
     }
 
