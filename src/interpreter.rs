@@ -120,6 +120,17 @@ fn visit_statement(stmt: &Stmt, mut env: Environment) -> Result<Environment, Run
             }
             env = *inner_env.outer.unwrap();
         }
+        Stmt::If {
+            condition,
+            then_stmt,
+            else_stmt,
+        } => {
+            if is_truthy(visit_expression(condition, &mut env)?) {
+                env = visit_statement(then_stmt, env)?
+            } else if let Some(branch) = else_stmt {
+                env = visit_statement(branch, env)?
+            }
+        }
     }
     Ok(env)
 }

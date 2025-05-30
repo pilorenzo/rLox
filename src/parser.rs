@@ -1,11 +1,7 @@
 use crate::statement::Stmt;
 use crate::token_type::TokenType::*;
-use crate::{Literal, Lox};
-// {
-//     Bang, BangEqual, EqualEqual, False, Greater, GreaterEqual, LeftParen, Less, LessEqual, Minus,
-//     Nil, Number, Plus, RightParen, Slash, Star, String, True,
-// };
 use crate::{expression::Expr, token_type::Token, TokenType};
+use crate::{Literal, Lox};
 
 pub struct Parser<'a> {
     pub lox: &'a mut Lox,
@@ -58,7 +54,9 @@ impl<'a> Parser<'a> {
     }
 
     fn statement(&mut self) -> Result<Stmt, ParseError> {
-        if self.match_type(vec![Print]) {
+        if self.match_type(vec![If]) {
+            self.if_statement()
+        } else if self.match_type(vec![Print]) {
             self.print_statement()
         } else if self.match_type(vec![LeftBrace]) {
             Ok(Stmt::Block {
@@ -69,18 +67,36 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn if_statement(&mut self) -> Result<Stmt, ParseError> {
+        self.consume(LeftParen, "Expect '(' after 'if'.")?;
+        let condition = Box::new(self.expression()?);
+        self.consume(RightParen, "Expect ')' after if condition.")?;
+        let then_stmt = Box::new(self.statement()?);
+        let else_stmt = if self.match_type(vec![Else]) {
+            Some(Box::new(self.statement()?))
+        } else {
+            None
+        };
+
+        Ok(Stmt::If {
+            condition,
+            then_stmt,
+            else_stmt,
+        })
+    }
+
     fn block(&mut self) -> Result<Vec<Stmt>, ParseError> {
         let mut stmts: Vec<Stmt> = vec![];
         while !self.check(RightBrace) && !self.is_at_end() {
             stmts.push(self.declaration()?);
         }
-        self.consume(RightBrace, "Expect");
+        self.consume(RightBrace, "Expect '}' after block.")?;
         Ok(stmts)
     }
 
     fn print_statement(&mut self) -> Result<Stmt, ParseError> {
         let expr = self.expression()?;
-        self.consume(Semicolon, "Excpect ';' after value.")?;
+        self.consume(Semicolon, "Expect ';' after value.")?;
         Ok(Stmt::Print {
             expression: Box::new(expr),
         })
@@ -88,7 +104,7 @@ impl<'a> Parser<'a> {
 
     fn expression_statement(&mut self) -> Result<Stmt, ParseError> {
         let expr = self.expression()?;
-        self.consume(Semicolon, "Excpect ';' after expression.")?;
+        self.consume(Semicolon, "Expect ';' after expression.")?;
         Ok(Stmt::Expression {
             expression: Box::new(expr),
         })
