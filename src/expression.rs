@@ -10,6 +10,11 @@ pub enum Expr {
         operator: Token,
         right: Box<Expr>,
     },
+    Logical {
+        left: Box<Expr>,
+        operator: Token,
+        right: Box<Expr>,
+    },
     Grouping {
         expression: Box<Expr>,
     },
@@ -37,6 +42,12 @@ impl Display for Expr {
                 operator,
                 right,
             } => write!(f, "Binary {{ {left}, {operator}, {right} }}"),
+
+            Expr::Logical {
+                left,
+                operator,
+                right,
+            } => write!(f, "Logical {{ {left}, {operator}, {right} }}"),
 
             Expr::Grouping { expression } => write!(f, "Grouping {{ {expression} }}"),
             Expr::Literal { value } => write!(f, "{value}"),

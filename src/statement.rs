@@ -23,6 +23,10 @@ pub enum Stmt {
         then_stmt: Box<Stmt>,
         else_stmt: Option<Box<Stmt>>,
     },
+    While {
+        condition: Box<Expr>,
+        body: Box<Stmt>,
+    },
 }
 
 impl Display for Stmt {
@@ -37,6 +41,9 @@ impl Display for Stmt {
                 then_stmt,
                 else_stmt,
             } => write!(f, "If {condition} then {then_stmt:?} else {else_stmt:?}"),
+            Stmt::While { condition, body } => {
+                write!(f, "While {condition} {{ {body:?} }}")
+            }
         }
     }
 }

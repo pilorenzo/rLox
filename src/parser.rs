@@ -1,7 +1,7 @@
 use crate::statement::Stmt;
 use crate::token_type::TokenType::*;
+use crate::{expression, Literal, Lox};
 use crate::{expression::Expr, token_type::Token, TokenType};
-use crate::{Literal, Lox};
 
 pub struct Parser<'a> {
     pub lox: &'a mut Lox,
@@ -54,10 +54,14 @@ impl<'a> Parser<'a> {
     }
 
     fn statement(&mut self) -> Result<Stmt, ParseError> {
-        if self.match_type(vec![If]) {
+        if self.match_type(vec![For]) {
+            self.for_statement()
+        } else if self.match_type(vec![If]) {
             self.if_statement()
         } else if self.match_type(vec![Print]) {
             self.print_statement()
+        } else if self.match_type(vec![While]) {
+            self.while_statement()
         } else if self.match_type(vec![LeftBrace]) {
             Ok(Stmt::Block {
                 statements: self.block()?,
@@ -65,6 +69,63 @@ impl<'a> Parser<'a> {
         } else {
             self.expression_statement()
         }
+    }
+
+    fn for_statement(&mut self) -> Result<Stmt, ParseError> {
+        self.consume(LeftParen, "Expect '(' after 'for'.")?;
+
+        let initializer = if self.match_type(vec![Semicolon]) {
+            Option::None
+        } else if self.match_type(vec![Var]) {
+            Some(self.var_declaration()?)
+        } else {
+            Some(self.expression_statement()?)
+        };
+
+        let condition = if !self.check(Semicolon) {
+            self.expression()?
+        } else {
+            /* if no condition, loops continuously */
+            Expr::Literal {
+                value: Literal::Boolean(true),
+            }
+        };
+
+        self.consume(Semicolon, "Expect ';' after loop condition")?;
+
+        let increment = if !self.check(RightParen) {
+            Some(self.expression()?)
+        } else {
+            Option::None
+        };
+
+        self.consume(RightParen, "Expect ')' after for clauses")?;
+
+        let mut body = self.statement()?;
+
+        if let Some(expr) = increment {
+            body = Stmt::Block {
+                statements: vec![
+                    body,
+                    Stmt::Expression {
+                        expression: Box::new(expr),
+                    },
+                ],
+            };
+        }
+
+        body = Stmt::While {
+            condition: Box::new(condition),
+            body: Box::new(body),
+        };
+
+        if let Some(stmt) = initializer {
+            body = Stmt::Block {
+                statements: vec![stmt, body],
+            };
+        }
+
+        Ok(body)
     }
 
     fn if_statement(&mut self) -> Result<Stmt, ParseError> {
@@ -83,6 +144,14 @@ impl<'a> Parser<'a> {
             then_stmt,
             else_stmt,
         })
+    }
+
+    fn while_statement(&mut self) -> Result<Stmt, ParseError> {
+        self.consume(LeftParen, "Expect '(' after 'while'.")?;
+        let condition = Box::new(self.expression()?);
+        self.consume(RightParen, "Expect ')' after while condition.")?;
+        let body = Box::new(self.statement()?);
+        Ok(Stmt::While { condition, body })
     }
 
     fn block(&mut self) -> Result<Vec<Stmt>, ParseError> {
@@ -115,7 +184,9 @@ impl<'a> Parser<'a> {
     }
 
     fn assignment(&mut self) -> Result<Expr, ParseError> {
-        let expr = self.equality()?;
+        // let expr = self.equality()?;
+        let expr = self.or()?;
+
         if self.match_type(vec![Equal]) {
             let equals = self.previous();
             let value = Box::new(self.assignment()?);
@@ -130,6 +201,34 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn or(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.and()?;
+        while self.match_type(vec![Or]) {
+            let operator = self.previous();
+            let right = self.and()?;
+            expr = Expr::Logical {
+                left: Box::new(expr),
+                operator,
+                right: Box::new(right),
+            }
+        }
+        Ok(expr)
+    }
+
+    fn and(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.equality()?;
+        while self.match_type(vec![And]) {
+            let operator = self.previous();
+            let right = self.equality()?;
+            expr = Expr::Logical {
+                left: Box::new(expr),
+                operator,
+                right: Box::new(right),
+            }
+        }
+        Ok(expr)
+    }
+
     fn equality(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.comparison()?;
         while self.match_type(vec![BangEqual, EqualEqual]) {
@@ -142,7 +241,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        println!("Equality expression {expr}");
+        // println!("Equality expression {expr}");
         Ok(expr)
     }
 

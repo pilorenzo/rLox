@@ -35,7 +35,7 @@ fn visit_expression(expression: &Expr, env: &mut Environment) -> Result<Literal,
         Expr::Unary { operator, right } => {
             let right = visit_expression(right, env)?;
             match operator.t_type {
-                TokenType::Bang => Literal::Boolean(!is_truthy(right)),
+                TokenType::Bang => Literal::Boolean(!is_truthy(&right)),
                 TokenType::Minus => Literal::Numeric(-to_num(operator.line, right)?),
                 _ => Literal::Null,
             }
@@ -74,14 +74,38 @@ fn visit_expression(expression: &Expr, env: &mut Environment) -> Result<Literal,
                 _ => Literal::Null,
             }
         }
+        Expr::Logical {
+            left,
+            operator,
+            right,
+        } => {
+            let left = visit_expression(left, env)?;
+            let mut result = None;
+            match operator.t_type {
+                TokenType::Or => {
+                    if is_truthy(&left) {
+                        result = Some(left);
+                    }
+                }
+                _ => {
+                    if !is_truthy(&left) {
+                        result = Some(left);
+                    }
+                }
+            };
+            match result {
+                Some(left) => left,
+                None => visit_expression(right, env)?,
+            }
+        }
     };
     Ok(literal)
 }
 
-fn is_truthy(value: Literal) -> bool {
+fn is_truthy(value: &Literal) -> bool {
     match value {
         Literal::Null => false,
-        Literal::Boolean(b) => b,
+        Literal::Boolean(b) => *b,
         _ => true,
     }
 }
@@ -125,10 +149,15 @@ fn visit_statement(stmt: &Stmt, mut env: Environment) -> Result<Environment, Run
             then_stmt,
             else_stmt,
         } => {
-            if is_truthy(visit_expression(condition, &mut env)?) {
+            if is_truthy(&visit_expression(condition, &mut env)?) {
                 env = visit_statement(then_stmt, env)?
             } else if let Some(branch) = else_stmt {
                 env = visit_statement(branch, env)?
+            }
+        }
+        Stmt::While { condition, body } => {
+            while is_truthy(&visit_expression(condition, &mut env)?) {
+                env = visit_statement(body, env)?
             }
         }
     }
