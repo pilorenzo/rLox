@@ -1,4 +1,7 @@
-use crate::{environment::Environment, expression::Expr, statement::Stmt, Literal, Lox, TokenType};
+use crate::{
+    environment::Environment, expression::Expr, lox_callable::LoxCallable, statement::Stmt,
+    Literal, Lox, TokenType,
+};
 
 pub enum RuntimeError {
     InvalidOperationError { line: i32, msg: String },
@@ -97,6 +100,19 @@ fn visit_expression(expression: &Expr, env: &mut Environment) -> Result<Literal,
                 Some(left) => left,
                 None => visit_expression(right, env)?,
             }
+        }
+        Expr::Call {
+            callee,
+            paren: _,
+            args,
+        } => {
+            let callee = visit_expression(callee, env)?;
+            let mut arguments = Vec::<Literal>::new();
+            for arg in args {
+                arguments.push(visit_expression(arg, env)?);
+            }
+            let function = LoxCallable {};
+            function.call(arguments)
         }
     };
     Ok(literal)

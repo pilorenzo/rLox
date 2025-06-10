@@ -32,6 +32,11 @@ pub enum Expr {
         name: Token,
         value: Box<Expr>,
     },
+    Call {
+        callee: Box<Expr>,
+        paren: Token,
+        args: Vec<Expr>,
+    },
 }
 
 impl Display for Expr {
@@ -54,6 +59,11 @@ impl Display for Expr {
             Expr::Unary { operator, right } => write!(f, "Literal {{ {operator}, {right} }}"),
             Expr::Variable { name } => write!(f, "Variable {name}"),
             Expr::Assignment { name, value } => write!(f, "Assignment of {value} to {name}"),
+            Expr::Call {
+                callee,
+                paren: _,
+                args,
+            } => write!(f, "Call {{ {callee}, {args:?} }}"),
         }
     }
 }

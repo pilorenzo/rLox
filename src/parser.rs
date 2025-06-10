@@ -257,7 +257,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        println!("comparison expression {expr}");
+        // println!("comparison expression {expr}");
         Ok(expr)
     }
 
@@ -273,7 +273,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        println!("term expression {expr}");
+        // println!("term expression {expr}");
         Ok(expr)
     }
 
@@ -289,7 +289,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        println!("factor expression {expr}");
+        // println!("factor expression {expr}");
         Ok(expr)
     }
 
@@ -303,11 +303,47 @@ impl<'a> Parser<'a> {
                 right: Box::new(right),
             };
         } else {
-            expr = self.primary()?;
+            expr = self.call()?;
         }
 
-        println!("unary expression {expr}");
+        // println!("unary expression {expr}");
         Ok(expr)
+    }
+
+    fn call(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.primary()?;
+        loop {
+            if self.match_type(vec![LeftParen]) {
+                expr = self.finish_call(expr)?;
+            } else {
+                break;
+            }
+        }
+        Ok(expr)
+    }
+
+    fn finish_call(&mut self, callee: Expr) -> Result<Expr, ParseError> {
+        let mut args = Vec::<Expr>::new();
+        if !self.check(RightParen) {
+            loop {
+                args.push(self.expression()?);
+                if args.len() > 16 {
+                    let line = self.peek().line;
+                    self.lox.error(line, "Can't have more than 16 arguments");
+                }
+                if !self.match_type(vec![Comma]) {
+                    break;
+                }
+            }
+        }
+
+        let callee = Box::new(callee);
+        let paren = self.consume(RightParen, "Expect ')' after arguments")?;
+        Ok(Expr::Call {
+            callee,
+            paren,
+            args,
+        })
     }
 
     fn primary(&mut self) -> Result<Expr, ParseError> {
