@@ -1,5 +1,7 @@
 use std::fmt::{Debug, Display};
 
+use crate::lox_callable::LoxCallable;
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TokenType {
     // Single-character tokens.
@@ -112,6 +114,7 @@ pub enum Literal {
     Letters(String),
     Null,
     Boolean(bool),
+    Callable(LoxCallable),
 }
 
 impl Display for Literal {
@@ -121,20 +124,14 @@ impl Display for Literal {
             Self::Letters(s) => s.clone(),
             Self::Null => "nil".to_owned(),
             Self::Boolean(b) => b.to_string(),
+            Self::Callable(_) => "<native function>".to_owned(),
         };
         write!(f, "{}", value)
     }
 }
 
-// #[derive(Debug, Clone)]
-// pub struct Literal {
-//     pub value: Box<LiteralType>,
-// }
-//
-// impl Literal {
-//     fn new(literal_type: LiteralType) -> Self {
-//         Self {
-//             value: Box::new(literal_type.clone()),
-//         }
-//     }
+// #[derive(Debug, Clone, PartialEq)]
+// pub struct Callee {
+//     pub name: String,
+//     pub args: Vec<Literal>,
 // }

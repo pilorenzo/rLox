@@ -1,3 +1,5 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use crate::{
     environment::Environment, expression::Expr, lox_callable::LoxCallable, statement::Stmt,
     Literal, Lox, TokenType,
@@ -12,7 +14,9 @@ pub enum RuntimeError {
 pub struct Interpreter;
 impl Interpreter {
     pub fn interpret(lox: &mut Lox, statements: &Vec<Stmt>) {
-        let mut env = Environment::global();
+        let mut global_env = Environment::global();
+        define_globals(&mut global_env);
+        let mut env = Environment::new(global_env);
         for stmt in statements {
             match visit_statement(stmt, env) {
                 Ok(e) => env = e,
@@ -103,7 +107,7 @@ fn visit_expression(expression: &Expr, env: &mut Environment) -> Result<Literal,
         }
         Expr::Call {
             callee,
-            paren: _,
+            paren,
             args,
         } => {
             let callee = visit_expression(callee, env)?;
@@ -111,7 +115,23 @@ fn visit_expression(expression: &Expr, env: &mut Environment) -> Result<Literal,
             for arg in args {
                 arguments.push(visit_expression(arg, env)?);
             }
-            let function = LoxCallable {};
+            let Literal::Callable(function) = callee else {
+                return Err(RuntimeError::InvalidOperationError {
+                    line: paren.line,
+                    msg: "Can only call function and classes".to_owned(),
+                });
+            };
+            // let function = LoxCallable(f);
+            if arguments.len() != function.arity() {
+                return Err(RuntimeError::InvalidOperationError {
+                    line: paren.line,
+                    msg: format!(
+                        "Expected {} arguments, got {}",
+                        function.arity(),
+                        arguments.len()
+                    ),
+                });
+            }
             function.call(arguments)
         }
     };
@@ -178,4 +198,30 @@ fn visit_statement(stmt: &Stmt, mut env: Environment) -> Result<Environment, Run
         }
     }
     Ok(env)
+}
+
+fn define_globals(env: &mut Environment) {
+    // let start = SystemTime::now();
+    // let func = |_| {
+    //     Literal::Numeric(
+    //         SystemTime::now()
+    //             .duration_since(UNIX_EPOCH)
+    //             .expect("Time went backwards")
+    //             .as_secs_f64(),
+    //     )
+    // };
+    env.define(
+        "clock".to_owned(),
+        Literal::Callable(LoxCallable {
+            arity: 0,
+            func: |_| {
+                Literal::Numeric(
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .expect("Time went backwards")
+                        .as_secs_f64(),
+                )
+            },
+        }),
+    )
 }
