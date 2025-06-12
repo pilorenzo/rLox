@@ -3,7 +3,22 @@ use std::fmt::{Debug, Display};
 
 use crate::Token;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+pub struct FunctionDeclaration {
+    pub name: Token,
+    pub params: Vec<Token>,
+    pub body: Vec<Stmt>,
+}
+impl PartialEq for FunctionDeclaration {
+    fn ne(&self, _: &Self) -> bool {
+        true
+    }
+    fn eq(&self, _: &Self) -> bool {
+        false
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum Stmt {
     Expression {
         expression: Box<Expr>,
@@ -27,6 +42,12 @@ pub enum Stmt {
         condition: Box<Expr>,
         body: Box<Stmt>,
     },
+    Fun {
+        // name: Token,
+        // params: Vec<Token>,
+        // body: Vec<Stmt>,
+        declaration: FunctionDeclaration,
+    },
 }
 
 impl Display for Stmt {
@@ -43,6 +64,10 @@ impl Display for Stmt {
             } => write!(f, "If {condition} then {then_stmt:?} else {else_stmt:?}"),
             Stmt::While { condition, body } => {
                 write!(f, "While {condition} {{ {body:?} }}")
+            }
+            Stmt::Fun { declaration } => {
+                let (name, params) = (&declaration.name, &declaration.params);
+                write!(f, "Function {name} ({params:?})")
             }
         }
     }

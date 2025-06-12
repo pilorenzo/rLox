@@ -114,7 +114,7 @@ pub enum Literal {
     Letters(String),
     Null,
     Boolean(bool),
-    Callable(LoxCallable),
+    Callable(Box<dyn LoxCallable>),
 }
 
 impl Display for Literal {
@@ -124,7 +124,7 @@ impl Display for Literal {
             Self::Letters(s) => s.clone(),
             Self::Null => "nil".to_owned(),
             Self::Boolean(b) => b.to_string(),
-            Self::Callable(_) => "<native function>".to_owned(),
+            Self::Callable(f) => f.to_string(),
         };
         write!(f, "{}", value)
     }

@@ -1,7 +1,13 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    ops::Deref,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use crate::{
-    environment::Environment, expression::Expr, lox_callable::LoxCallable, statement::Stmt,
+    environment::Environment,
+    expression::Expr,
+    lox_callable::{LoxAnonymous, LoxCallable, LoxFunction},
+    statement::{self, Stmt},
     Literal, Lox, TokenType,
 };
 
@@ -11,12 +17,22 @@ pub enum RuntimeError {
     UndefinedVariable { line: i32, msg: String },
 }
 
-pub struct Interpreter;
+pub struct Interpreter {
+    pub globals: Environment,
+}
+
 impl Interpreter {
+    pub fn new() -> Self {
+        let mut globals = Environment::global();
+        define_globals(&mut globals);
+        Self { globals }
+    }
+
     pub fn interpret(lox: &mut Lox, statements: &Vec<Stmt>) {
-        let mut global_env = Environment::global();
-        define_globals(&mut global_env);
-        let mut env = Environment::new(global_env);
+        // let mut globals = Environment::global();
+        // define_globals(&mut globals);
+        let interpreter = Interpreter::new();
+        let mut env = Environment::new(interpreter.globals);
         for stmt in statements {
             match visit_statement(stmt, env) {
                 Ok(e) => env = e,
@@ -122,17 +138,17 @@ fn visit_expression(expression: &Expr, env: &mut Environment) -> Result<Literal,
                 });
             };
             // let function = LoxCallable(f);
-            if arguments.len() != function.arity() {
+            if arguments.len() != function.get_arity() {
                 return Err(RuntimeError::InvalidOperationError {
                     line: paren.line,
                     msg: format!(
                         "Expected {} arguments, got {}",
-                        function.arity(),
+                        function.get_arity(),
                         arguments.len()
                     ),
                 });
             }
-            function.call(arguments)
+            function.call(None, arguments)
         }
     };
     Ok(literal)
@@ -173,13 +189,7 @@ fn visit_statement(stmt: &Stmt, mut env: Environment) -> Result<Environment, Run
             };
             env.define(name.lexeme.clone(), val);
         }
-        Stmt::Block { statements } => {
-            let mut inner_env = Environment::new(env);
-            for statement in statements {
-                inner_env = visit_statement(statement, inner_env)?;
-            }
-            env = *inner_env.outer.unwrap();
-        }
+        Stmt::Block { statements } => env = execute_block(statements, env)?,
         Stmt::If {
             condition,
             then_stmt,
@@ -196,7 +206,24 @@ fn visit_statement(stmt: &Stmt, mut env: Environment) -> Result<Environment, Run
                 env = visit_statement(body, env)?
             }
         }
+        Stmt::Fun { declaration } => {
+            let dec = (*declaration).clone();
+            let function = LoxFunction::new(dec);
+            env.define(declaration.name.lexeme, Literal::Callable(function))
+        }
     }
+    Ok(env)
+}
+
+pub fn execute_block(
+    statements: &Vec<Stmt>,
+    mut env: Environment,
+) -> Result<Environment, RuntimeError> {
+    let mut inner_env = Environment::new(env);
+    for statement in statements {
+        inner_env = visit_statement(&statement, inner_env)?;
+    }
+    env = *inner_env.outer.unwrap();
     Ok(env)
 }
 
@@ -212,16 +239,13 @@ fn define_globals(env: &mut Environment) {
     // };
     env.define(
         "clock".to_owned(),
-        Literal::Callable(LoxCallable {
-            arity: 0,
-            func: |_| {
-                Literal::Numeric(
-                    SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .expect("Time went backwards")
-                        .as_secs_f64(),
-                )
-            },
-        }),
+        Literal::Callable(LoxAnonymous::new(0, |_| {
+            Literal::Numeric(
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .expect("Time went backwards")
+                    .as_secs_f64(),
+            )
+        })),
     )
 }

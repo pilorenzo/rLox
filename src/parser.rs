@@ -1,4 +1,4 @@
-use crate::statement::Stmt;
+use crate::statement::{FunctionDeclaration, Stmt};
 use crate::token_type::TokenType::*;
 use crate::{expression, Literal, Lox};
 use crate::{expression::Expr, token_type::Token, TokenType};
@@ -30,11 +30,37 @@ impl<'a> Parser<'a> {
     }
 
     fn declaration(&mut self) -> Result<Stmt, ParseError> {
-        if self.match_type(vec![Var]) {
+        if self.match_type(vec![Fun]) {
+            self.function("function")
+        } else if self.match_type(vec![Var]) {
             self.var_declaration()
         } else {
             self.statement()
         }
+    }
+
+    fn function(&mut self, kind: &str) -> Result<Stmt, ParseError> {
+        let name = self.consume(Identifier, &format!("Expect {kind} name"))?;
+        self.consume(LeftParen, &format!("Expect '(' after {kind} name"))?;
+        let mut params = vec![];
+        if !self.check(RightParen) {
+            loop {
+                if params.len() >= 16 {
+                    self.lox
+                        .error(self.peek().line, "Can't have more than 16 parameters");
+                }
+                params.push(self.consume(Identifier, "Expect parameter name.")?);
+                if !self.match_type(vec![Comma]) {
+                    break;
+                }
+            }
+        }
+        self.consume(RightParen, "Expect ')' after parameters")?;
+        self.consume(LeftBrace, &format!("Expect '{{' before {kind} body"))?;
+        let body = self.block()?;
+        Ok(Stmt::Fun {
+            declaration: FunctionDeclaration { name, params, body },
+        })
     }
 
     fn var_declaration(&mut self) -> Result<Stmt, ParseError> {
