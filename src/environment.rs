@@ -1,22 +1,24 @@
 use crate::{interpreter::RuntimeError, token_type::Token, Literal};
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 pub struct Environment {
     dict: HashMap<String, Literal>,
-    pub outer: Option<Box<Environment>>,
+    pub outer: Option<Rc<RefCell<Environment>>>,
 }
 
 impl Environment {
-    pub fn global() -> Self {
-        Environment {
+    pub fn global() -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Environment {
             dict: HashMap::<String, Literal>::new(),
             outer: None,
-        }
+        }))
     }
-    pub fn new(outer: Environment) -> Self {
+    pub fn new(outer: Rc<RefCell<Environment>>) -> Self {
         Environment {
             dict: HashMap::<String, Literal>::new(),
-            outer: Some(Box::new(outer)),
+            outer: Some(outer),
         }
     }
     pub fn define(&mut self, name: String, value: Literal) {
@@ -27,7 +29,7 @@ impl Environment {
         if self.dict.contains_key(name) {
             Ok(self.dict[name].clone())
         } else if let Some(outer) = &self.outer {
-            outer.get(token)
+            outer.borrow_mut().get(token)
         } else {
             Err(RuntimeError::IdentifierError {
                 line: token.line,
@@ -42,7 +44,7 @@ impl Environment {
             *v = value;
             Ok(())
         } else if let Some(outer) = &mut self.outer {
-            outer.assign(token, value)
+            outer.borrow_mut().assign(token, value)
         } else {
             Err(RuntimeError::UndefinedVariable {
                 line: token.line,

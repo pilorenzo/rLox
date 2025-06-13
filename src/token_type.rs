@@ -114,7 +114,7 @@ pub enum Literal {
     Letters(String),
     Null,
     Boolean(bool),
-    Callable(Box<dyn LoxCallable>),
+    Callable(Box<LoxCallable>),
 }
 
 impl Display for Literal {

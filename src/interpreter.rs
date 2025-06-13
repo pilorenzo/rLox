@@ -1,13 +1,9 @@
-use std::{
-    ops::Deref,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
-    environment::Environment,
-    expression::Expr,
-    lox_callable::{LoxAnonymous, LoxCallable, LoxFunction},
-    statement::{self, Stmt},
+    environment::Environment, expression::Expr, lox_callable::LoxCallable, statement::Stmt,
     Literal, Lox, TokenType,
 };
 
@@ -18,13 +14,13 @@ pub enum RuntimeError {
 }
 
 pub struct Interpreter {
-    pub globals: Environment,
+    pub globals: Rc<RefCell<Environment>>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
-        let mut globals = Environment::global();
-        define_globals(&mut globals);
+        let globals = Environment::global();
+        define_globals(&globals);
         Self { globals }
     }
 
@@ -32,10 +28,10 @@ impl Interpreter {
         // let mut globals = Environment::global();
         // define_globals(&mut globals);
         let interpreter = Interpreter::new();
-        let mut env = Environment::new(interpreter.globals);
+        let env = Rc::new(RefCell::new(Environment::new(interpreter.globals)));
         for stmt in statements {
-            match visit_statement(stmt, env) {
-                Ok(e) => env = e,
+            match visit_statement(stmt, Rc::clone(&env)) {
+                Ok(_) => continue,
                 Err(error) => {
                     lox.runtime_error(error);
                     return;
@@ -45,14 +41,17 @@ impl Interpreter {
     }
 }
 
-fn visit_expression(expression: &Expr, env: &mut Environment) -> Result<Literal, RuntimeError> {
+fn visit_expression(
+    expression: &Expr,
+    env: Rc<RefCell<Environment>>,
+) -> Result<Literal, RuntimeError> {
     let literal = match expression {
         Expr::Assignment { name, value } => {
-            let value = visit_expression(value, env)?;
-            env.assign(name.clone(), value.clone())?;
+            let value = visit_expression(value, Rc::clone(&env))?;
+            env.borrow_mut().assign(name.clone(), value.clone())?;
             value
         }
-        Expr::Variable { name } => env.get(name.clone())?,
+        Expr::Variable { name } => env.borrow_mut().get(name.clone())?,
         Expr::Literal { value } => value.clone(),
         Expr::Grouping { expression } => visit_expression(expression, env)?,
         Expr::Unary { operator, right } => {
@@ -68,7 +67,10 @@ fn visit_expression(expression: &Expr, env: &mut Environment) -> Result<Literal,
             operator,
             right,
         } => {
-            let (right, left) = (visit_expression(right, env)?, visit_expression(left, env)?);
+            let (right, left) = (
+                visit_expression(right, Rc::clone(&env))?,
+                visit_expression(left, Rc::clone(&env))?,
+            );
             let l = operator.line;
             match operator.t_type {
                 TokenType::Greater => Literal::Boolean(to_num(l, left)? > to_num(l, right)?),
@@ -102,7 +104,7 @@ fn visit_expression(expression: &Expr, env: &mut Environment) -> Result<Literal,
             operator,
             right,
         } => {
-            let left = visit_expression(left, env)?;
+            let left = visit_expression(left, Rc::clone(&env))?;
             let mut result = None;
             match operator.t_type {
                 TokenType::Or => {
@@ -118,7 +120,7 @@ fn visit_expression(expression: &Expr, env: &mut Environment) -> Result<Literal,
             };
             match result {
                 Some(left) => left,
-                None => visit_expression(right, env)?,
+                None => visit_expression(right, Rc::clone(&env))?,
             }
         }
         Expr::Call {
@@ -126,10 +128,10 @@ fn visit_expression(expression: &Expr, env: &mut Environment) -> Result<Literal,
             paren,
             args,
         } => {
-            let callee = visit_expression(callee, env)?;
+            let callee = visit_expression(callee, Rc::clone(&env))?;
             let mut arguments = Vec::<Literal>::new();
             for arg in args {
-                arguments.push(visit_expression(arg, env)?);
+                arguments.push(visit_expression(arg, Rc::clone(&env))?);
             }
             let Literal::Callable(function) = callee else {
                 return Err(RuntimeError::InvalidOperationError {
@@ -148,7 +150,7 @@ fn visit_expression(expression: &Expr, env: &mut Environment) -> Result<Literal,
                     ),
                 });
             }
-            function.call(None, arguments)
+            function.call(Some(env), arguments)?
         }
     };
     Ok(literal)
@@ -172,12 +174,15 @@ fn to_num(line: i32, lit: Literal) -> Result<f64, RuntimeError> {
     }
 }
 
-fn visit_statement(stmt: &Stmt, mut env: Environment) -> Result<Environment, RuntimeError> {
+fn visit_statement(
+    stmt: &Stmt,
+    mut env: Rc<RefCell<Environment>>,
+) -> Result<Rc<RefCell<Environment>>, RuntimeError> {
     match stmt {
         Stmt::Expression { expression } => {
-            visit_expression(expression, &mut env)?;
+            visit_expression(expression, Rc::clone(&env))?;
         }
-        Stmt::Print { expression } => match visit_expression(expression, &mut env) {
+        Stmt::Print { expression } => match visit_expression(expression, Rc::clone(&env)) {
             Ok(value) => println!("{value}"),
             Err(e) => return Err(e),
         },
@@ -185,31 +190,37 @@ fn visit_statement(stmt: &Stmt, mut env: Environment) -> Result<Environment, Run
             let val = if initializer.is_null() {
                 Literal::Null
             } else {
-                visit_expression(initializer, &mut env)?
+                visit_expression(initializer, Rc::clone(&env))?
             };
-            env.define(name.lexeme.clone(), val);
+            env.borrow_mut().define(name.lexeme.clone(), val);
         }
-        Stmt::Block { statements } => env = execute_block(statements, env)?,
+        Stmt::Block { statements } => {
+            let block_env = Rc::new(RefCell::new(Environment::new(Rc::clone(&env))));
+            execute_block(statements, block_env)?;
+        }
         Stmt::If {
             condition,
             then_stmt,
             else_stmt,
         } => {
-            if is_truthy(&visit_expression(condition, &mut env)?) {
+            if is_truthy(&visit_expression(condition, Rc::clone(&env))?) {
                 env = visit_statement(then_stmt, env)?
             } else if let Some(branch) = else_stmt {
-                env = visit_statement(branch, env)?
+                env = visit_statement(branch, Rc::clone(&env))?
             }
         }
         Stmt::While { condition, body } => {
-            while is_truthy(&visit_expression(condition, &mut env)?) {
-                env = visit_statement(body, env)?
+            while is_truthy(&visit_expression(condition, Rc::clone(&env))?) {
+                env = visit_statement(body, Rc::clone(&env))?
             }
         }
         Stmt::Fun { declaration } => {
             let dec = (*declaration).clone();
-            let function = LoxFunction::new(dec);
-            env.define(declaration.name.lexeme, Literal::Callable(function))
+            let function = LoxCallable::LoxFunction { declaration: dec };
+            env.borrow_mut().define(
+                declaration.name.lexeme.clone(),
+                Literal::Callable(Box::new(function)),
+            )
         }
     }
     Ok(env)
@@ -217,17 +228,18 @@ fn visit_statement(stmt: &Stmt, mut env: Environment) -> Result<Environment, Run
 
 pub fn execute_block(
     statements: &Vec<Stmt>,
-    mut env: Environment,
-) -> Result<Environment, RuntimeError> {
-    let mut inner_env = Environment::new(env);
+    mut env: Rc<RefCell<Environment>>,
+) -> Result<(), RuntimeError> {
+    // let mut inner_env = &mut Environment::new(&mut env);
     for statement in statements {
-        inner_env = visit_statement(&statement, inner_env)?;
+        env = visit_statement(statement, env)?;
     }
-    env = *inner_env.outer.unwrap();
-    Ok(env)
+    // env = *inner_env.outer.unwrap();
+    // Ok(env)
+    Ok(())
 }
 
-fn define_globals(env: &mut Environment) {
+fn define_globals(env: &Rc<RefCell<Environment>>) {
     // let start = SystemTime::now();
     // let func = |_| {
     //     Literal::Numeric(
@@ -237,15 +249,18 @@ fn define_globals(env: &mut Environment) {
     //             .as_secs_f64(),
     //     )
     // };
-    env.define(
+    env.borrow_mut().define(
         "clock".to_owned(),
-        Literal::Callable(LoxAnonymous::new(0, |_| {
-            Literal::Numeric(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("Time went backwards")
-                    .as_secs_f64(),
-            )
+        Literal::Callable(Box::new(LoxCallable::LoxAnonymous {
+            arity: 0,
+            func: |_| {
+                Literal::Numeric(
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .expect("Time went backwards")
+                        .as_secs_f64(),
+                )
+            },
         })),
     )
 }
