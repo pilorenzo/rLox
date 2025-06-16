@@ -1,16 +1,10 @@
 use core::fmt;
-use std::cell::RefCell;
 use std::fmt::{Debug, Display};
-use std::rc::Rc;
 
+use crate::interpreter::Interpreter;
 use crate::{
-    environment::Environment,
-    interpreter::{execute_block, RuntimeError},
-    statement::FunctionDeclaration,
-    Literal,
+    environment::Environment, interpreter::RuntimeError, statement::FunctionDeclaration, Literal,
 };
-
-/* TODO: make LoxCallable an enum, it seems like it's way easier */
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LoxCallable {
@@ -33,18 +27,19 @@ impl LoxCallable {
 
     pub fn call(
         &self,
-        env: Option<Rc<RefCell<Environment>>>,
+        interpreter: &mut Interpreter,
         arguments: Vec<Literal>,
     ) -> Result<Literal, RuntimeError> {
         match self {
             LoxCallable::LoxAnonymous { arity: _, func } => Ok((func)(arguments)),
             LoxCallable::LoxFunction { declaration } => {
-                let mut environment =
-                    Environment::new(env.expect("LoxFunction without global environment"));
+                interpreter.graph.envs.push(Environment::new());
                 for (param, arg) in declaration.params.iter().zip(arguments.iter()) {
-                    environment.define(param.lexeme.clone(), arg.clone())
+                    interpreter
+                        .get_last_environment_mut()
+                        .define(param.lexeme.clone(), arg.clone())
                 }
-                execute_block(&declaration.body, Rc::new(RefCell::new(environment)))?;
+                interpreter.execute_block(&declaration.body)?;
                 Ok(Literal::Null)
             }
         }
@@ -62,106 +57,3 @@ impl Display for LoxCallable {
         }
     }
 }
-
-// pub trait LoxCallable: fmt::Display {
-//     fn get_arity(&self) -> usize;
-//     fn call(&self, env: Option<Environment>, arguments: Vec<Literal>) -> Literal;
-// }
-//
-// // #[derive(Debug, PartialEq)]
-// pub struct LoxAnonymous {
-//     arity: usize,
-//     pub func: fn(Vec<Literal>) -> Literal,
-// }
-//
-// impl LoxAnonymous {
-//     pub fn new(arity: usize, func: fn(Vec<Literal>) -> Literal) -> Self {
-//         Self { arity, func }
-//     }
-// }
-//
-// impl LoxCallable for LoxAnonymous {
-//     fn get_arity(&self) -> usize {
-//         self.arity
-//     }
-//     fn call(&self, _: Option<Environment>, arguments: Vec<Literal>) -> Literal {
-//         (self.func)(arguments)
-//     }
-// }
-//
-// impl Display for LoxAnonymous {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         write!(f, "<anonymous function>")
-//     }
-// }
-//
-// impl Clone for Box<LoxAnonymous> {
-//     fn clone(&self) -> Box<LoxAnonymous> {
-//         Box::new(LoxAnonymous::new(self.arity.clone(), self.func.clone()))
-//     }
-// }
-//
-// impl PartialEq for dyn LoxCallable {
-//     fn ne(&self, _: &Self) -> bool {
-//         true
-//     }
-//     fn eq(&self, _: &Self) -> bool {
-//         false
-//     }
-// }
-//
-// impl Clone for Box<dyn LoxCallable> {
-//     fn clone(&self) -> Box<dyn LoxCallable> {
-//         match **self {
-//             LoxFunction { declaration } => Box::new(LoxFunction::new(declaration.clone())),
-//             LoxAnonymous { arity, func } => Box::new(LoxAnonymous::new(arity, func.clone())),
-//         }
-//         // Box::new(self.clone())
-//     }
-// }
-//
-// impl Debug for dyn LoxCallable {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         write!(f, "LoxCallable")
-//     }
-// }
-//
-// // #[derive(Debug, PartialEq)]
-// pub struct LoxFunction {
-//     declaration: FunctionDeclaration,
-// }
-//
-// impl LoxFunction {
-//     pub fn new(declaration: FunctionDeclaration) -> Self {
-//         Self { declaration }
-//     }
-// }
-//
-// impl LoxCallable for LoxFunction {
-//     fn get_arity(&self) -> usize {
-//         self.declaration.params.len()
-//     }
-//
-//     fn call(&self, global: Option<Environment>, arguments: Vec<Literal>) -> Literal {
-//         let mut environment =
-//             Environment::new(global.expect("LoxFunction without global environment"));
-//         for (param, arg) in self.declaration.params.iter().zip(arguments.iter()) {
-//             environment.define(param.lexeme.clone(), arg.clone())
-//         }
-//         execute_block(&self.declaration.body, environment);
-//         Literal::Null
-//     }
-// }
-//
-// impl Display for LoxFunction {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         let name = &self.declaration.name.lexeme;
-//         write!(f, "<fn {name}>")
-//     }
-// }
-//
-// impl Clone for Box<LoxFunction> {
-//     fn clone(&self) -> Self {
-//         Box::new(LoxFunction::new(self.declaration.clone()))
-//     }
-// }

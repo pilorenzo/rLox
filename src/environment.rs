@@ -1,55 +1,65 @@
 use crate::{interpreter::RuntimeError, token_type::Token, Literal};
-use std::cell::RefCell;
+// use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
+// use std::rc::Rc;
 
 pub struct Environment {
     dict: HashMap<String, Literal>,
-    pub outer: Option<Rc<RefCell<Environment>>>,
 }
 
 impl Environment {
-    pub fn global() -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Environment {
-            dict: HashMap::<String, Literal>::new(),
-            outer: None,
-        }))
-    }
-    pub fn new(outer: Rc<RefCell<Environment>>) -> Self {
+    pub fn global() -> Self {
         Environment {
             dict: HashMap::<String, Literal>::new(),
-            outer: Some(outer),
         }
     }
+    pub fn new() -> Self {
+        Environment {
+            dict: HashMap::<String, Literal>::new(),
+        }
+    }
+
     pub fn define(&mut self, name: String, value: Literal) {
         self.dict.insert(name, value);
     }
-    pub fn get(&self, token: Token) -> Result<Literal, RuntimeError> {
-        let name = &token.lexeme;
-        if self.dict.contains_key(name) {
-            Ok(self.dict[name].clone())
-        } else if let Some(outer) = &self.outer {
-            outer.borrow_mut().get(token)
-        } else {
-            Err(RuntimeError::IdentifierError {
-                line: token.line,
-                msg: format!("Undefined variable '{name}'."),
-            })
-        }
+}
+
+pub struct EnvironmentGraph {
+    pub envs: Vec<Environment>,
+}
+
+impl EnvironmentGraph {
+    pub fn new(global: Environment) -> Self {
+        Self { envs: vec![global] }
     }
+
+    pub fn get(&self, token: Token) -> Result<Literal, RuntimeError> {
+        // self.get_in_env(token, &self.envs.last().unwrap())
+        let name = &token.lexeme;
+        for env in self.envs.iter().rev() {
+            if env.dict.contains_key(name) {
+                return Ok(env.dict[name].clone());
+            }
+        }
+
+        Err(RuntimeError::IdentifierError {
+            line: token.line,
+            msg: format!("Undefined variable '{name}'."),
+        })
+    }
+
     pub fn assign(&mut self, token: Token, value: Literal) -> Result<(), RuntimeError> {
         let name = &token.lexeme;
-
-        if let Some(v) = self.dict.get_mut(name) {
-            *v = value;
-            Ok(())
-        } else if let Some(outer) = &mut self.outer {
-            outer.borrow_mut().assign(token, value)
-        } else {
-            Err(RuntimeError::UndefinedVariable {
-                line: token.line,
-                msg: format!("Trying to assign to an undefined variable '{name}'."),
-            })
+        for env in self.envs.iter_mut().rev() {
+            if let Some(v) = env.dict.get_mut(name) {
+                *v = value;
+                return Ok(());
+            }
         }
+
+        Err(RuntimeError::UndefinedVariable {
+            line: token.line,
+            msg: format!("Trying to assign to an undefined variable '{name}'."),
+        })
     }
 }
