@@ -137,6 +137,9 @@ impl Lox {
             RuntimeError::InvalidOperationError { line, msg } => (msg, line),
             RuntimeError::IdentifierError { line, msg } => (msg, line),
             RuntimeError::UndefinedVariable { line, msg } => (msg, line),
+            RuntimeError::Return { value } => {
+                (format!("not an error, returning value {value}"), -1)
+            }
         };
         eprintln!("{} \n[line {}]", msg, line);
         self.had_runtime_error = true;

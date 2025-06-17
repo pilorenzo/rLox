@@ -70,13 +70,21 @@ impl Display for Expr {
 
 impl Expr {
     pub fn is_null(&self) -> bool {
-        if let Expr::Literal { value } = self {
-            match value {
-                Literal::Null => true,
-                _ => false,
+        matches!(
+            self,
+            Expr::Literal {
+                value: Literal::Null,
             }
-        } else {
-            false
-        }
+        )
     }
 }
+//     if let Expr::Literal { value } = self {
+//         if let Literal::Null = value {
+//             true
+//         } else {
+//             false
+//         }
+//     } else {
+//         false
+//     }
+// }

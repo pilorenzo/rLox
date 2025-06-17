@@ -39,8 +39,13 @@ impl LoxCallable {
                         .get_last_environment_mut()
                         .define(param.lexeme.clone(), arg.clone())
                 }
-                interpreter.execute_block(&declaration.body)?;
-                Ok(Literal::Null)
+                let res = match interpreter.execute_block(&declaration.body) {
+                    Err(RuntimeError::Return { value }) => Ok(value),
+                    Err(e) => Err(e),
+                    Ok(()) => Ok(Literal::Null),
+                };
+                interpreter.graph.envs.pop();
+                res
             }
         }
     }

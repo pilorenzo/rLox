@@ -10,6 +10,7 @@ pub enum RuntimeError {
     InvalidOperationError { line: i32, msg: String },
     IdentifierError { line: i32, msg: String },
     UndefinedVariable { line: i32, msg: String },
+    Return { value: Literal },
 }
 
 pub struct Interpreter {
@@ -68,6 +69,7 @@ impl Interpreter {
             Stmt::Block { statements } => {
                 self.graph.envs.push(Environment::new());
                 self.execute_block(statements)?;
+                self.graph.envs.pop();
             }
             Stmt::If {
                 condition,
@@ -92,6 +94,10 @@ impl Interpreter {
                     declaration.name.lexeme.clone(),
                     Literal::Callable(Box::new(function)),
                 )
+            }
+            Stmt::Return { keyword: _, value } => {
+                let value = self.visit_expression(value)?;
+                return Err(RuntimeError::Return { value });
             }
         }
         Ok(())

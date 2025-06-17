@@ -43,10 +43,11 @@ pub enum Stmt {
         body: Box<Stmt>,
     },
     Fun {
-        // name: Token,
-        // params: Vec<Token>,
-        // body: Vec<Stmt>,
         declaration: FunctionDeclaration,
+    },
+    Return {
+        keyword: Token,
+        value: Box<Expr>,
     },
 }
 
@@ -57,14 +58,13 @@ impl Display for Stmt {
             Stmt::Print { expression } => write!(f, "Print {{ {expression} }}"),
             Stmt::Var { name, initializer } => write!(f, "var {name} {{ {initializer} }}"),
             Stmt::Block { statements } => write!(f, "Block {{ {statements:?} }}"),
+            Stmt::Return { keyword: _, value } => write!(f, "Return {value}"),
+            Stmt::While { condition, body } => write!(f, "While {condition} {{ {body:?} }}"),
             Stmt::If {
                 condition,
                 then_stmt,
                 else_stmt,
             } => write!(f, "If {condition} then {then_stmt:?} else {else_stmt:?}"),
-            Stmt::While { condition, body } => {
-                write!(f, "While {condition} {{ {body:?} }}")
-            }
             Stmt::Fun { declaration } => {
                 let (name, params) = (&declaration.name, &declaration.params);
                 write!(f, "Function {name} ({params:?})")

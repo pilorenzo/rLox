@@ -1,7 +1,7 @@
 use crate::statement::{FunctionDeclaration, Stmt};
 use crate::token_type::TokenType::*;
-use crate::{expression, Literal, Lox};
 use crate::{expression::Expr, token_type::Token, TokenType};
+use crate::{Literal, Lox};
 
 pub struct Parser<'a> {
     pub lox: &'a mut Lox,
@@ -84,6 +84,8 @@ impl<'a> Parser<'a> {
             self.for_statement()
         } else if self.match_type(vec![If]) {
             self.if_statement()
+        } else if self.match_type(vec![Return]) {
+            self.return_statement()
         } else if self.match_type(vec![Print]) {
             self.print_statement()
         } else if self.match_type(vec![While]) {
@@ -195,6 +197,20 @@ impl<'a> Parser<'a> {
         Ok(Stmt::Print {
             expression: Box::new(expr),
         })
+    }
+
+    fn return_statement(&mut self) -> Result<Stmt, ParseError> {
+        let keyword = self.previous();
+        let value = if !self.check(Semicolon) {
+            self.expression()?
+        } else {
+            Expr::Literal {
+                value: Literal::Null,
+            }
+        };
+        let value = Box::new(value);
+        self.consume(Semicolon, "Expect ';' after return.")?;
+        Ok(Stmt::Return { keyword, value })
     }
 
     fn expression_statement(&mut self) -> Result<Stmt, ParseError> {
