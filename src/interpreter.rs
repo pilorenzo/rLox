@@ -1,6 +1,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::environment::EnvironmentGraph;
+use crate::lox_callable::LoxFunction;
 use crate::{
     environment::Environment, expression::Expr, lox_callable::LoxCallable, statement::Stmt,
     Literal, Lox, TokenType,
@@ -19,24 +20,17 @@ pub struct Interpreter {
 
 impl Interpreter {
     pub fn new() -> Self {
-        let mut globals = Environment::global();
-        define_globals(&mut globals);
+        let mut global = Environment::new();
+        define_globals(&mut global);
         Self {
-            graph: EnvironmentGraph::new(globals),
+            graph: EnvironmentGraph::new(global),
         }
-    }
-
-    pub fn get_last_environment_mut(&mut self) -> &mut Environment {
-        self.graph
-            .envs
-            .last_mut()
-            .expect("No environment found in the interpreter")
     }
 
     pub fn interpret(lox: &mut Lox, statements: &Vec<Stmt>) {
         let mut interpreter = Interpreter::new();
         let env = Environment::new();
-        interpreter.graph.envs.push(env);
+        interpreter.graph.push(env);
         for stmt in statements {
             match interpreter.visit_statement(stmt) {
                 Ok(_) => continue,
@@ -63,11 +57,10 @@ impl Interpreter {
                 } else {
                     self.visit_expression(initializer)?
                 };
-                self.get_last_environment_mut()
-                    .define(name.lexeme.clone(), val);
+                self.graph.define(name.lexeme.clone(), val);
             }
             Stmt::Block { statements } => {
-                self.graph.envs.push(Environment::new());
+                self.graph.push(Environment::new());
                 self.execute_block(statements)?;
                 self.graph.envs.pop();
             }
@@ -89,8 +82,10 @@ impl Interpreter {
             }
             Stmt::Fun { declaration } => {
                 let dec = (*declaration).clone();
-                let function = LoxCallable::LoxFunction { declaration: dec };
-                self.get_last_environment_mut().define(
+                let closure = self.graph.change_last_to_closure();
+                let function = LoxFunction::new(dec, closure);
+                let function = LoxCallable::Function { function };
+                self.graph.define(
                     declaration.name.lexeme.clone(),
                     Literal::Callable(Box::new(function)),
                 )
@@ -242,7 +237,7 @@ fn to_num(line: i32, lit: Literal) -> Result<f64, RuntimeError> {
 fn define_globals(env: &mut Environment) {
     env.define(
         "clock".to_owned(),
-        Literal::Callable(Box::new(LoxCallable::LoxAnonymous {
+        Literal::Callable(Box::new(LoxCallable::Anonymous {
             arity: 0,
             func: |_| {
                 Literal::Numeric(

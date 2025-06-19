@@ -10,9 +10,6 @@ pub struct FunctionDeclaration {
     pub body: Vec<Stmt>,
 }
 impl PartialEq for FunctionDeclaration {
-    fn ne(&self, _: &Self) -> bool {
-        true
-    }
     fn eq(&self, _: &Self) -> bool {
         false
     }

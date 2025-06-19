@@ -53,10 +53,10 @@ impl<'a> Scanner<'a> {
             '+' => self.add_token(TokenType::Plus),
             ';' => self.add_token(TokenType::Semicolon),
             '*' => self.add_token(TokenType::Star),
-            '!' => self.add_token_conditional('=', TokenType::BangEqual, TokenType::Bang),
+            '!' => self.add_token_conditional('!', TokenType::BangEqual, TokenType::Bang),
             '=' => self.add_token_conditional('=', TokenType::EqualEqual, TokenType::Equal),
-            '<' => self.add_token_conditional('=', TokenType::LessEqual, TokenType::Less),
-            '>' => self.add_token_conditional('=', TokenType::GreaterEqual, TokenType::Greater),
+            '<' => self.add_token_conditional('<', TokenType::LessEqual, TokenType::Less),
+            '>' => self.add_token_conditional('>', TokenType::GreaterEqual, TokenType::Greater),
             '/' => {
                 if self.match_char('/') {
                     while self.peek() != '\n' && !self.is_at_end() {
@@ -122,13 +122,21 @@ impl<'a> Scanner<'a> {
         self.add_token_with_literal(t, Token::empty_literal());
     }
 
-    fn get_source_substring(&self) -> String {
+    fn get_source_substring(&self, debug: bool) -> String {
         let (start, current) = (self.start as usize, self.current as usize);
-        self.source[start..current].to_owned()
+        if debug {
+            let start_char = self.source.chars().take(start).last().unwrap();
+            println!("start {start_char} char nbr {start}");
+            let current_char = self.source.chars().take(current).last().unwrap();
+            println!("current {current_char} char nbr {current}");
+        }
+        let string = self.source[start..current].to_owned();
+        println!("new string {string}");
+        string
     }
 
     fn add_token_with_literal(&mut self, t: TokenType, literal: Literal) {
-        let text = self.get_source_substring();
+        let text = self.get_source_substring(false);
         self.tokens.push(Token::new(t, &text, literal, self.line));
     }
 
@@ -152,7 +160,7 @@ impl<'a> Scanner<'a> {
         self.advance();
 
         // remove the "
-        let substring = self.get_source_substring();
+        let substring = self.get_source_substring(false);
         let mut chars = substring.chars();
         chars.next();
         chars.next_back();
@@ -177,7 +185,7 @@ impl<'a> Scanner<'a> {
             }
         }
 
-        let text = self.get_source_substring();
+        let text = self.get_source_substring(true);
         let literal = Literal::Numeric(text.parse::<f64>().unwrap());
         self.add_token_with_literal(TokenType::Number, literal)
     }
@@ -195,7 +203,7 @@ impl<'a> Scanner<'a> {
             self.advance();
         }
 
-        let text = self.get_source_substring();
+        let text = self.get_source_substring(false);
         let token_type = match Token::get_keyword_by_name(&text) {
             Some(t) => t,
             None => TokenType::Identifier,
