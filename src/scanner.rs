@@ -6,8 +6,8 @@ pub struct Scanner<'a> {
     lox: &'a mut Lox,
     source: String,
     tokens: Vec<Token>,
-    start: i32,
-    current: i32,
+    start: usize,
+    current: usize,
     line: i32,
 }
 
@@ -53,10 +53,10 @@ impl<'a> Scanner<'a> {
             '+' => self.add_token(TokenType::Plus),
             ';' => self.add_token(TokenType::Semicolon),
             '*' => self.add_token(TokenType::Star),
-            '!' => self.add_token_conditional('!', TokenType::BangEqual, TokenType::Bang),
+            '!' => self.add_token_conditional('=', TokenType::BangEqual, TokenType::Bang),
             '=' => self.add_token_conditional('=', TokenType::EqualEqual, TokenType::Equal),
-            '<' => self.add_token_conditional('<', TokenType::LessEqual, TokenType::Less),
-            '>' => self.add_token_conditional('>', TokenType::GreaterEqual, TokenType::Greater),
+            '<' => self.add_token_conditional('=', TokenType::LessEqual, TokenType::Less),
+            '>' => self.add_token_conditional('=', TokenType::GreaterEqual, TokenType::Greater),
             '/' => {
                 if self.match_char('/') {
                     while self.peek() != '\n' && !self.is_at_end() {
@@ -80,7 +80,7 @@ impl<'a> Scanner<'a> {
     fn current_char(&self) -> char {
         self.source
             .chars()
-            .nth(self.current as usize)
+            .nth(self.current)
             .expect("Char not found")
     }
 
@@ -101,7 +101,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn peek_next(&self) -> char {
-        let next = (self.current + 1) as usize;
+        let next = self.current + 1;
         self.source.chars().nth(next).unwrap_or('\0')
     }
 
@@ -122,26 +122,20 @@ impl<'a> Scanner<'a> {
         self.add_token_with_literal(t, Token::empty_literal());
     }
 
-    fn get_source_substring(&self, debug: bool) -> String {
-        let (start, current) = (self.start as usize, self.current as usize);
-        if debug {
-            let start_char = self.source.chars().take(start).last().unwrap();
-            println!("start {start_char} char nbr {start}");
-            let current_char = self.source.chars().take(current).last().unwrap();
-            println!("current {current_char} char nbr {current}");
-        }
-        let string = self.source[start..current].to_owned();
-        println!("new string {string}");
-        string
+    fn get_source_substring(&self) -> String {
+        let mut char_by_indices = self.source.char_indices();
+        let (start, _) = char_by_indices.nth(self.start).unwrap();
+        let (current, _) = char_by_indices.nth(self.current - self.start - 1).unwrap();
+        self.source[start..current].to_owned()
     }
 
     fn add_token_with_literal(&mut self, t: TokenType, literal: Literal) {
-        let text = self.get_source_substring(false);
+        let text = self.get_source_substring();
         self.tokens.push(Token::new(t, &text, literal, self.line));
     }
 
     fn is_at_end(&self) -> bool {
-        self.current as usize >= self.source.chars().count()
+        self.current >= self.source.chars().count()
     }
 
     fn scan_string(&mut self) {
@@ -160,7 +154,7 @@ impl<'a> Scanner<'a> {
         self.advance();
 
         // remove the "
-        let substring = self.get_source_substring(false);
+        let substring = self.get_source_substring();
         let mut chars = substring.chars();
         chars.next();
         chars.next_back();
@@ -185,7 +179,7 @@ impl<'a> Scanner<'a> {
             }
         }
 
-        let text = self.get_source_substring(true);
+        let text = self.get_source_substring();
         let literal = Literal::Numeric(text.parse::<f64>().unwrap());
         self.add_token_with_literal(TokenType::Number, literal)
     }
@@ -203,7 +197,7 @@ impl<'a> Scanner<'a> {
             self.advance();
         }
 
-        let text = self.get_source_substring(false);
+        let text = self.get_source_substring();
         let token_type = match Token::get_keyword_by_name(&text) {
             Some(t) => t,
             None => TokenType::Identifier,

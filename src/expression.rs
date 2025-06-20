@@ -3,7 +3,7 @@ use std::fmt::{Debug, Display};
 
 use crate::Token;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Binary {
         left: Box<Expr>,

@@ -10,12 +10,14 @@ pub struct FunctionDeclaration {
     pub body: Vec<Stmt>,
 }
 impl PartialEq for FunctionDeclaration {
-    fn eq(&self, _: &Self) -> bool {
-        false
+    fn eq(&self, other: &Self) -> bool {
+        let has_same_name = self.name == other.name;
+        let has_same_param = self.params == other.params;
+        has_same_name && has_same_param
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     Expression {
         expression: Box<Expr>,

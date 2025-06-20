@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::environment::EnvironmentGraph;
@@ -16,6 +17,16 @@ pub enum RuntimeError {
 
 pub struct Interpreter {
     pub graph: EnvironmentGraph,
+}
+
+impl Display for Interpreter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut result = String::default();
+        for (i, e) in self.graph.envs.iter().enumerate() {
+            result += &format!("Environment {i}:\n{e}");
+        }
+        write!(f, "{result}")
+    }
 }
 
 impl Interpreter {

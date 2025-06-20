@@ -1,6 +1,7 @@
 use core::fmt;
 use std::cell::RefCell;
 use std::fmt::{Debug, Display};
+use std::ptr;
 use std::rc::Rc;
 
 use crate::environment::EnvironmentNode;
@@ -53,7 +54,7 @@ impl LoxCallable {
                 let mut is_closure_env_in_graph = false;
                 let outer = interpreter.graph.envs.last();
                 if let Some(EnvironmentNode::Closure { env }) = outer {
-                    is_closure_env_in_graph = env == &function.closure;
+                    is_closure_env_in_graph = ptr::eq(&*env.borrow(), &*function.closure.borrow());
                 }
                 if !is_closure_env_in_graph {
                     interpreter.graph.envs.push(EnvironmentNode::Closure {
@@ -64,6 +65,11 @@ impl LoxCallable {
                 for (param, arg) in function.declaration.params.iter().zip(arguments.iter()) {
                     interpreter.graph.define(param.lexeme.clone(), arg.clone())
                 }
+                println!("\n\n###########################");
+                print!("Interpreter \n{interpreter}");
+                println!("---------------------------");
+                print!("Closure env :\n{}", function.closure.borrow());
+                println!("###########################\n\n");
                 let res = match interpreter.execute_block(&function.declaration.body) {
                     Err(RuntimeError::Return { value }) => Ok(value),
                     Err(e) => Err(e),

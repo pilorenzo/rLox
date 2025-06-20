@@ -1,5 +1,5 @@
 use crate::{interpreter::RuntimeError, token_type::Token, Literal};
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, fmt::Display, rc::Rc};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Environment {
@@ -18,6 +18,17 @@ impl Environment {
     }
 }
 
+impl Display for Environment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut result: String = String::default();
+        for (name, value) in self.dict.iter() {
+            result += &format!("{name}: {value}\n");
+        }
+        write!(f, "{result}")
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum EnvironmentNode {
     Standard { env: Environment },
     Closure { env: Rc<RefCell<Environment>> },
@@ -35,6 +46,15 @@ impl EnvironmentNode {
         match self {
             EnvironmentNode::Standard { env } => env.dict[name].clone(),
             EnvironmentNode::Closure { env } => env.borrow().dict[name].clone(),
+        }
+    }
+}
+
+impl Display for EnvironmentNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EnvironmentNode::Standard { env } => writeln!(f, "{env}"),
+            EnvironmentNode::Closure { env } => writeln!(f, "{}", env.borrow()),
         }
     }
 }
