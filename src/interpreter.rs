@@ -225,6 +225,10 @@ impl Interpreter {
         }
         Ok(())
     }
+
+    pub fn resolve(&self, expr: &Expr, i: usize) {
+        todo!()
+    }
 }
 
 fn is_truthy(value: &Literal) -> bool {
