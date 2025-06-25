@@ -1,8 +1,11 @@
-use std::fmt::{Debug, Display};
+use std::{
+    fmt::{Debug, Display},
+    hash::Hash,
+};
 
 use crate::lox_callable::LoxCallable;
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, Hash)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,
@@ -108,6 +111,14 @@ impl Display for Token {
     }
 }
 
+impl Hash for Token {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.t_type.hash(state);
+        self.lexeme.hash(state);
+        self.line.hash(state);
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     Numeric(f64),
@@ -127,6 +138,15 @@ impl Display for Literal {
             Self::Callable(f) => f.to_string(),
         };
         write!(f, "{}", value)
+    }
+}
+
+impl Hash for Literal {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Literal::Numeric(f) => f.to_bits().hash(state),
+            other => other.hash(state),
+        }
     }
 }
 

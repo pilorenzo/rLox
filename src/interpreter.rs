@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -5,18 +6,19 @@ use crate::environment::EnvironmentGraph;
 use crate::lox_callable::LoxFunction;
 use crate::{
     environment::Environment, expression::Expr, lox_callable::LoxCallable, statement::Stmt,
-    Literal, Lox, TokenType,
+    Literal, TokenType,
 };
 
 pub enum RuntimeError {
     InvalidOperationError { line: i32, msg: String },
-    IdentifierError { line: i32, msg: String },
+    // IdentifierError { line: i32, msg: String },
     UndefinedVariable { line: i32, msg: String },
     Return { value: Literal },
 }
 
 pub struct Interpreter {
     pub graph: EnvironmentGraph,
+    locals: HashMap<Expr, usize>,
 }
 
 impl Display for Interpreter {
@@ -24,6 +26,10 @@ impl Display for Interpreter {
         let mut result = String::default();
         for (i, e) in self.graph.envs.iter().enumerate() {
             result += &format!("Environment {i}:\n{e}");
+        }
+        result += "-----------------\n";
+        for (k, v) in self.locals.iter() {
+            result += &format!("Locals {k}: {v}\n");
         }
         write!(f, "{result}")
     }
@@ -35,25 +41,11 @@ impl Interpreter {
         define_globals(&mut global);
         Self {
             graph: EnvironmentGraph::new(global),
+            locals: Default::default(),
         }
     }
 
-    pub fn interpret(lox: &mut Lox, statements: &Vec<Stmt>) {
-        let mut interpreter = Interpreter::new();
-        let env = Environment::new();
-        interpreter.graph.push(env);
-        for stmt in statements {
-            match interpreter.visit_statement(stmt) {
-                Ok(_) => continue,
-                Err(error) => {
-                    lox.runtime_error(error);
-                    return;
-                }
-            }
-        }
-    }
-
-    fn visit_statement(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
+    pub fn visit_statement(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
         match stmt {
             Stmt::Expression { expression } => {
                 self.visit_expression(expression)?;
@@ -113,10 +105,23 @@ impl Interpreter {
         let literal = match expression {
             Expr::Assignment { name, value } => {
                 let value = self.visit_expression(value)?;
-                self.graph.assign(name.clone(), value.clone())?;
+                // self.graph.assign(name.clone(), value.clone())?;
+                // value
+                match self.locals.get(expression) {
+                    Some(distance) => self.graph.assign_at(distance, name, &value)?,
+                    None => self.graph.envs[0].assign_literal(name, &value).unwrap(),
+                }
                 value
             }
-            Expr::Variable { name } => self.graph.get(name.clone())?,
+            Expr::Variable { name } => {
+                // print!("Interpreter \n{}", self);
+                // println!("---------------------------");
+                // println!("Expression {expression}");
+                match self.locals.get(expression) {
+                    Some(distance) => self.graph.get_at(distance, name)?,
+                    None => self.graph.envs[0].get_literal(&name.lexeme),
+                }
+            }
             Expr::Literal { value } => value.clone(),
             Expr::Grouping { expression } => self.visit_expression(expression)?,
             Expr::Unary { operator, right } => {
@@ -226,8 +231,8 @@ impl Interpreter {
         Ok(())
     }
 
-    pub fn resolve(&self, expr: &Expr, i: usize) {
-        todo!()
+    pub fn resolve(&mut self, expr: &Expr, i: usize) {
+        self.locals.insert(expr.clone(), i);
     }
 }
 

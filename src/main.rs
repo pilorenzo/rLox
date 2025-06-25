@@ -11,7 +11,9 @@ mod token_type;
 use interpreter::{Interpreter, RuntimeError};
 // use expression::Expr;
 use parser::Parser;
+use resolver::Resolver;
 use scanner::*;
+use statement::Stmt;
 use std::{
     env,
     fs::read,
@@ -22,6 +24,7 @@ use token_type::Token;
 use token_type::*;
 
 fn main() -> Result<(), Error> {
+    // env::set_var("RUST_BACKTRACE", "1");
     let args: Vec<String> = env::args().collect();
     let mut lox = Lox::new();
     println!("Hello, world!");
@@ -110,9 +113,33 @@ impl Lox {
             return;
         };
 
-        Interpreter::interpret(self, &statements);
+        Lox::resolve_and_interpret(self, &statements);
         // println!("{}", ast_printer::print_ast(&expr));
         //
+    }
+
+    fn resolve_and_interpret(lox: &mut Lox, statements: &Vec<Stmt>) {
+        let mut interpreter = Interpreter::new();
+        let mut resolver = Resolver::new(&mut interpreter, lox);
+        for stmt in statements {
+            resolver.visit_statement(stmt);
+        }
+
+        if lox.had_error {
+            return;
+        }
+
+        println!("Ended resolve\n");
+
+        for stmt in statements {
+            match interpreter.visit_statement(stmt) {
+                Ok(_) => continue,
+                Err(error) => {
+                    lox.runtime_error(error);
+                    return;
+                }
+            }
+        }
     }
 
     fn error(&mut self, line: i32, message: &str) {
@@ -136,7 +163,7 @@ impl Lox {
     pub fn runtime_error(&mut self, error: RuntimeError) {
         let (msg, line) = match error {
             RuntimeError::InvalidOperationError { line, msg } => (msg, line),
-            RuntimeError::IdentifierError { line, msg } => (msg, line),
+            // RuntimeError::IdentifierError { line, msg } => (msg, line),
             RuntimeError::UndefinedVariable { line, msg } => (msg, line),
             RuntimeError::Return { value } => {
                 (format!("not an error, returning value {value}"), -1)

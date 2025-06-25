@@ -1,5 +1,8 @@
 use crate::expression::Expr;
-use std::fmt::{Debug, Display};
+use std::{
+    fmt::{Debug, Display},
+    hash::Hash,
+};
 
 use crate::Token;
 
@@ -14,6 +17,14 @@ impl PartialEq for FunctionDeclaration {
         let has_same_name = self.name == other.name;
         let has_same_param = self.params == other.params;
         has_same_name && has_same_param
+    }
+}
+
+impl Eq for FunctionDeclaration {}
+impl Hash for FunctionDeclaration {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.params.hash(state);
     }
 }
 

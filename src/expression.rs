@@ -3,7 +3,7 @@ use std::fmt::{Debug, Display};
 
 use crate::Token;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub enum Expr {
     Binary {
         left: Box<Expr>,
@@ -67,6 +67,8 @@ impl Display for Expr {
         }
     }
 }
+
+impl Eq for Expr {}
 
 impl Expr {
     pub fn is_null(&self) -> bool {

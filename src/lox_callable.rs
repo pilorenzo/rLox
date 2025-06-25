@@ -1,6 +1,7 @@
 use core::fmt;
 use std::cell::RefCell;
 use std::fmt::{Debug, Display};
+use std::hash::Hash;
 use std::ptr;
 use std::rc::Rc;
 
@@ -24,7 +25,13 @@ impl LoxFunction {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+impl Hash for LoxFunction {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.declaration.hash(state);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub enum LoxCallable {
     Anonymous {
         arity: usize,
@@ -65,11 +72,11 @@ impl LoxCallable {
                 for (param, arg) in function.declaration.params.iter().zip(arguments.iter()) {
                     interpreter.graph.define(param.lexeme.clone(), arg.clone())
                 }
-                println!("\n\n###########################");
-                print!("Interpreter \n{interpreter}");
-                println!("---------------------------");
-                print!("Closure env :\n{}", function.closure.borrow());
-                println!("###########################\n\n");
+                // println!("\n\n###########################");
+                // print!("Interpreter \n{interpreter}");
+                // println!("---------------------------");
+                // print!("Closure env :\n{}", function.closure.borrow());
+                // println!("###########################\n\n");
                 let res = match interpreter.execute_block(&function.declaration.body) {
                     Err(RuntimeError::Return { value }) => Ok(value),
                     Err(e) => Err(e),

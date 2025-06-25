@@ -1,39 +1,75 @@
 use std::collections::HashMap;
 
 use crate::{
-    expression::Expr, interpreter::Interpreter, statement::Stmt, token_type::Token, Literal, Lox,
+    expression::Expr,
+    interpreter::Interpreter,
+    statement::{FunctionDeclaration, Stmt},
+    token_type::Token,
+    Literal, Lox,
 };
 
-pub struct Resolver<'lox> {
-    interpreter: Interpreter,
-    scopes: Vec<HashMap<String, bool>>,
-    lox: &'lox mut Lox,
+#[derive(Clone, Copy)]
+pub enum FunctionType {
+    None,
+    Function,
 }
 
-impl<'lox> Resolver<'lox> {
-    fn new(interpreter: Interpreter, lox: &'lox mut Lox) -> Self {
-        let scopes = Default::default();
+pub struct Resolver<'lox, 'int> {
+    lox: &'lox mut Lox,
+    interpreter: &'int mut Interpreter,
+    scopes: Vec<HashMap<String, bool>>,
+    current_function: FunctionType,
+}
+
+impl<'lox, 'int> Resolver<'lox, 'int> {
+    pub fn new(interpreter: &'int mut Interpreter, lox: &'lox mut Lox) -> Self {
         Resolver {
-            interpreter,
-            scopes,
             lox,
+            interpreter,
+            scopes: Default::default(),
+            current_function: FunctionType::None,
         }
     }
 
-    fn visit_statement(&mut self, stmt: &Stmt) {
+    pub fn visit_statement(&mut self, stmt: &Stmt) {
         match stmt {
             Stmt::Block { statements } => self.visit_block(statements),
             Stmt::Var { name, initializer } => self.visit_var(name, initializer),
-            _ => {}
+            Stmt::Fun { declaration } => self.visit_func(declaration),
+            Stmt::Expression { expression } => self.visit_expr_statement(expression),
+            Stmt::Print { expression } => self.visit_print(expression),
+            Stmt::Return { keyword, value } => self.visit_return(keyword, value),
+            Stmt::While { condition, body } => self.visit_while(condition, body),
+            Stmt::If {
+                condition,
+                then_stmt,
+                else_stmt,
+            } => self.visit_if(condition, then_stmt, else_stmt),
         }
     }
 
     fn visit_expression(&mut self, expr: &Expr) {
         match expr {
             Expr::Variable { name } => self.visit_var_expression(expr, name),
-            Expr::Literal { value } => self.visit_literal_expression(expr, value),
+            Expr::Literal { value: _ } => self.visit_literal_expression(),
             Expr::Assignment { name, value } => self.visit_assignment_expression(expr, name, value),
-            _ => {}
+            Expr::Grouping { expression } => self.visit_grouping_expression(expression),
+            Expr::Unary { operator: _, right } => self.visit_unary_expression(right),
+            Expr::Logical {
+                left,
+                operator: _,
+                right,
+            } => self.visit_logical_expression(left, right),
+            Expr::Call {
+                callee,
+                paren: _,
+                args,
+            } => self.visit_call_expression(callee, args),
+            Expr::Binary {
+                left,
+                operator: _,
+                right,
+            } => self.visit_binary_expression(left, right),
         }
     }
 
@@ -65,7 +101,14 @@ impl<'lox> Resolver<'lox> {
 
     fn declare(&mut self, name: &Token) {
         if let Some(scope) = self.scopes.last_mut() {
-            scope.insert(name.lexeme.clone(), false);
+            let old_value = scope.insert(name.lexeme.clone(), false);
+            if old_value.is_some() {
+                let lexeme = &name.lexeme;
+                self.lox.error(
+                    name.line,
+                    &format!("Already a variable named '{lexeme}' in this scope"),
+                );
+            }
         }
     }
 
@@ -87,24 +130,107 @@ impl<'lox> Resolver<'lox> {
         }
     }
 
-    fn resolve_local(&self, expr: &Expr, name: &Token) {
+    fn resolve_local(&mut self, expr: &Expr, name: &Token) {
         let pos = self
             .scopes
             .iter()
-            //.rev()
+            .rev()
             .position(|s| s.contains_key(&name.lexeme));
 
-        if let Some(i) = pos {
-            self.interpreter.resolve(expr, i);
-        }
-    }
+        // let tok_name = &name.lexeme;
+        // println!("Position {pos:?} of {tok_name}");
+        // println!("Token value {}: line:{}", &name.literal, &name.line);
+        // println!("Scopes {:?}", self.scopes);
 
-    fn visit_literal_expression(&self, expr: &Expr, value: &Literal) {
-        todo!()
+        if let Some(i) = pos {
+            /* Index is different from book, because here global is environment 0 */
+            let index = self.scopes.len() - i;
+            self.interpreter.resolve(expr, index);
+        }
     }
 
     fn visit_assignment_expression(&mut self, expr: &Expr, name: &Token, value: &Expr) {
         self.visit_expression(value);
         self.resolve_local(expr, name);
+    }
+
+    fn visit_func(&mut self, declaration: &FunctionDeclaration) {
+        self.declare(&declaration.name);
+        self.define(&declaration.name);
+        self.resolve_function(declaration, FunctionType::Function);
+    }
+
+    fn resolve_function(&mut self, declaration: &FunctionDeclaration, func_type: FunctionType) {
+        let enclosing_func = self.current_function;
+        self.current_function = func_type;
+        self.begin_scope();
+        for param in declaration.params.iter() {
+            self.declare(param);
+            self.define(param);
+        }
+        self.visit_block(&declaration.body);
+        self.end_scope();
+        self.current_function = enclosing_func;
+    }
+
+    fn visit_literal_expression(&self) {}
+
+    fn visit_expr_statement(&mut self, expression: &Expr) {
+        self.visit_expression(expression);
+    }
+
+    fn visit_print(&mut self, expression: &Expr) {
+        self.visit_expression(expression);
+    }
+
+    fn visit_return(&mut self, keyword: &Token, value: &Expr) {
+        if let FunctionType::None = self.current_function {
+            let line = keyword.line;
+            self.lox.error(line, "Can't return from top-level code.");
+        }
+        match value {
+            Expr::Literal {
+                value: Literal::Null,
+            } => {}
+            _ => self.visit_expression(value),
+        }
+    }
+
+    fn visit_while(&mut self, condition: &Expr, body: &Stmt) {
+        self.visit_expression(condition);
+        self.visit_statement(body);
+    }
+
+    fn visit_if(&mut self, condition: &Expr, then_stmt: &Stmt, else_stmt: &Option<Box<Stmt>>) {
+        self.visit_expression(condition);
+        self.visit_statement(then_stmt);
+        if let Some(else_branch) = else_stmt {
+            self.visit_statement(else_branch)
+        }
+    }
+
+    fn visit_grouping_expression(&mut self, expression: &Expr) {
+        self.visit_expression(expression);
+    }
+
+    fn visit_unary_expression(&mut self, right: &Expr) {
+        self.visit_expression(right);
+    }
+
+    fn visit_logical_expression(&mut self, left: &Expr, right: &Expr) {
+        self.visit_expression(left);
+        self.visit_expression(right);
+    }
+
+    fn visit_call_expression(&mut self, callee: &Expr, args: &[Expr]) {
+        self.visit_expression(callee);
+        for arg in args {
+            self.visit_expression(arg);
+        }
+    }
+
+    fn visit_binary_expression(&mut self, left: &Expr, right: &Expr) {
+        self.visit_expression(left);
+        self.visit_expression(right);
     }
 }
