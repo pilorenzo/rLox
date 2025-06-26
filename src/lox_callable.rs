@@ -32,6 +32,9 @@ impl Hash for LoxFunction {
 }
 
 #[derive(Debug, Clone, PartialEq, Hash)]
+pub struct ClassName(pub String);
+
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub enum LoxCallable {
     Anonymous {
         arity: usize,
@@ -40,6 +43,9 @@ pub enum LoxCallable {
     Function {
         function: LoxFunction,
     },
+    Class {
+        name: ClassName,
+    },
 }
 
 impl LoxCallable {
@@ -47,6 +53,7 @@ impl LoxCallable {
         match self {
             LoxCallable::Anonymous { arity, func: _ } => *arity,
             LoxCallable::Function { function } => function.declaration.params.len(),
+            LoxCallable::Class { name: _ } => 0,
         }
     }
 
@@ -88,6 +95,10 @@ impl LoxCallable {
                 }
                 res
             }
+            LoxCallable::Class { name } => Ok(Literal::Class(Box::new(LoxInstance::new(
+                name.clone(),
+                self.clone(),
+            )))),
         }
     }
 }
@@ -100,6 +111,25 @@ impl Display for LoxCallable {
                 let name = &function.declaration.name.lexeme;
                 write!(f, "<fn {name}>")
             }
+            LoxCallable::Class { name } => write!(f, "class {}", name.0),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LoxInstance {
+    klass_name: ClassName,
+    klass: LoxCallable,
+}
+
+impl Display for LoxInstance {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} instance", self.klass_name.0)
+    }
+}
+
+impl LoxInstance {
+    fn new(klass_name: ClassName, klass: LoxCallable) -> Self {
+        Self { klass_name, klass }
     }
 }

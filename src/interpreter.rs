@@ -3,7 +3,7 @@ use std::fmt::Display;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::environment::EnvironmentGraph;
-use crate::lox_callable::LoxFunction;
+use crate::lox_callable::{ClassName, LoxFunction};
 use crate::{
     environment::Environment, expression::Expr, lox_callable::LoxCallable, statement::Stmt,
     Literal, TokenType,
@@ -96,6 +96,15 @@ impl Interpreter {
             Stmt::Return { keyword: _, value } => {
                 let value = self.visit_expression(value)?;
                 return Err(RuntimeError::Return { value });
+            }
+            Stmt::Class { name, methods: _ } => {
+                // let name = &token.lexeme;
+                self.graph.define(name.lexeme.clone(), Literal::Null);
+                let klass = LoxCallable::Class {
+                    name: ClassName(name.lexeme.clone()),
+                };
+                let klass = Box::new(klass);
+                self.graph.assign(name.clone(), Literal::Callable(klass))?;
             }
         }
         Ok(())

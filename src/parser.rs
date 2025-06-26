@@ -30,13 +30,31 @@ impl<'a> Parser<'a> {
     }
 
     fn declaration(&mut self) -> Result<Stmt, ParseError> {
-        if self.match_type(vec![Fun]) {
+        if self.match_type(vec![Class]) {
+            self.class_declaration()
+        } else if self.match_type(vec![Fun]) {
             self.function("function")
         } else if self.match_type(vec![Var]) {
             self.var_declaration()
         } else {
             self.statement()
         }
+    }
+
+    fn class_declaration(&mut self) -> Result<Stmt, ParseError> {
+        let name = self.consume(Identifier, "Expect class name")?;
+        self.consume(LeftBrace, "Expect '{' before class body")?;
+        let mut methods = vec![];
+        while !self.check(RightBrace) && !self.is_at_end() {
+            let stmt = self.function("method")?;
+            if let Stmt::Fun { declaration } = stmt {
+                methods.push(declaration);
+            } else {
+                panic!("function() has not returned a function statement: {stmt}");
+            }
+        }
+        self.consume(RightBrace, "Expect '}' after class body")?;
+        Ok(Stmt::Class { name, methods })
     }
 
     fn function(&mut self, kind: &str) -> Result<Stmt, ParseError> {

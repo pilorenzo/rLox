@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
 };
 
-use crate::lox_callable::LoxCallable;
+use crate::lox_callable::{LoxCallable, LoxInstance};
 
 #[derive(Debug, PartialEq, Clone, Copy, Hash)]
 pub enum TokenType {
@@ -126,6 +126,7 @@ pub enum Literal {
     Null,
     Boolean(bool),
     Callable(Box<LoxCallable>),
+    Class(Box<LoxInstance>),
 }
 
 impl Display for Literal {
@@ -136,6 +137,7 @@ impl Display for Literal {
             Self::Null => "nil".to_owned(),
             Self::Boolean(b) => b.to_string(),
             Self::Callable(f) => f.to_string(),
+            Self::Class(i) => i.to_string(),
         };
         write!(f, "{}", value)
     }

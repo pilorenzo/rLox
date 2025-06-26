@@ -108,31 +108,31 @@ impl EnvironmentGraph {
     //     })
     // }
     //
-    // pub fn assign(&mut self, token: Token, value: Literal) -> Result<(), RuntimeError> {
-    //     let name = &token.lexeme;
-    //     for environment in self.envs.iter_mut().rev() {
-    //         match environment {
-    //             EnvironmentNode::Standard { env } => {
-    //                 if let Some(v) = env.dict.get_mut(name) {
-    //                     *v = value;
-    //                     return Ok(());
-    //                 }
-    //             }
-    //             EnvironmentNode::Closure { env } => {
-    //                 if let Some(v) = env.borrow_mut().dict.get_mut(name) {
-    //                     *v = value;
-    //                     return Ok(());
-    //                 }
-    //             }
-    //         };
-    //     }
-    //
-    //     Err(RuntimeError::UndefinedVariable {
-    //         line: token.line,
-    //         msg: format!("Trying to assign to an undefined variable '{name}'."),
-    //     })
-    // }
-    //
+    pub fn assign(&mut self, token: Token, value: Literal) -> Result<(), RuntimeError> {
+        let name = &token.lexeme;
+        for environment in self.envs.iter_mut().rev() {
+            match environment {
+                EnvironmentNode::Standard { env } => {
+                    if let Some(v) = env.dict.get_mut(name) {
+                        *v = value;
+                        return Ok(());
+                    }
+                }
+                EnvironmentNode::Closure { env } => {
+                    if let Some(v) = env.borrow_mut().dict.get_mut(name) {
+                        *v = value;
+                        return Ok(());
+                    }
+                }
+            };
+        }
+
+        Err(RuntimeError::UndefinedVariable {
+            line: token.line,
+            msg: format!("Trying to assign to an undefined variable '{name}'."),
+        })
+    }
+
     pub fn push(&mut self, env: Environment) {
         self.envs.push(EnvironmentNode::Standard { env })
     }

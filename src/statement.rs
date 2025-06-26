@@ -59,6 +59,11 @@ pub enum Stmt {
         keyword: Token,
         value: Box<Expr>,
     },
+
+    Class {
+        name: Token,
+        methods: Vec<FunctionDeclaration>,
+    },
 }
 
 impl Display for Stmt {
@@ -79,6 +84,7 @@ impl Display for Stmt {
                 let (name, params) = (&declaration.name, &declaration.params);
                 write!(f, "Function {name} ({params:?})")
             }
+            Stmt::Class { name, methods: _ } => write!(f, "Class {}", name.lexeme),
         }
     }
 }

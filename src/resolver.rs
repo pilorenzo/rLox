@@ -36,6 +36,7 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
             Stmt::Block { statements } => self.visit_block(statements),
             Stmt::Var { name, initializer } => self.visit_var(name, initializer),
             Stmt::Fun { declaration } => self.visit_func(declaration),
+            Stmt::Class { name, methods } => self.visit_class(name, methods),
             Stmt::Expression { expression } => self.visit_expr_statement(expression),
             Stmt::Print { expression } => self.visit_print(expression),
             Stmt::Return { keyword, value } => self.visit_return(keyword, value),
@@ -232,5 +233,10 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
     fn visit_binary_expression(&mut self, left: &Expr, right: &Expr) {
         self.visit_expression(left);
         self.visit_expression(right);
+    }
+
+    fn visit_class(&mut self, name: &Token, methods: &[FunctionDeclaration]) {
+        self.declare(name);
+        self.define(name);
     }
 }
