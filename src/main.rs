@@ -165,6 +165,7 @@ impl Lox {
             RuntimeError::InvalidOperationError { line, msg } => (msg, line),
             // RuntimeError::IdentifierError { line, msg } => (msg, line),
             RuntimeError::UndefinedVariable { line, msg } => (msg, line),
+            RuntimeError::PropertyError { line, msg } => (msg, line),
             RuntimeError::Return { value } => {
                 (format!("not an error, returning value {value}"), -1)
             }

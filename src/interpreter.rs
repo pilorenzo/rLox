@@ -13,6 +13,7 @@ pub enum RuntimeError {
     InvalidOperationError { line: i32, msg: String },
     // IdentifierError { line: i32, msg: String },
     UndefinedVariable { line: i32, msg: String },
+    PropertyError { line: i32, msg: String },
     Return { value: Literal },
 }
 
@@ -228,6 +229,34 @@ impl Interpreter {
                     });
                 }
                 function.call(self, arguments)?
+            }
+            Expr::Get { object, name } => {
+                let object = self.visit_expression(object)?;
+                if let Literal::Class(instance) = object {
+                    instance.get(name)?
+                } else {
+                    return Err(RuntimeError::PropertyError {
+                        line: name.line,
+                        msg: "Only instances have properties".to_owned(),
+                    });
+                }
+            }
+            Expr::Set {
+                object,
+                name,
+                value,
+            } => {
+                let object = self.visit_expression(object)?;
+                if let Literal::Class(mut instance) = object {
+                    let value = self.visit_expression(value)?;
+                    instance.set(name, &value);
+                    value
+                } else {
+                    return Err(RuntimeError::PropertyError {
+                        line: name.line,
+                        msg: "Only instances have fields".to_owned(),
+                    });
+                }
             }
         };
         Ok(literal)

@@ -1,12 +1,14 @@
 use core::fmt;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
-use std::ptr;
+use std::ptr::{self, NonNull};
 use std::rc::Rc;
 
 use crate::environment::EnvironmentNode;
 use crate::interpreter::Interpreter;
+use crate::token_type::Token;
 use crate::{
     environment::Environment, interpreter::RuntimeError, statement::FunctionDeclaration, Literal,
 };
@@ -120,6 +122,7 @@ impl Display for LoxCallable {
 pub struct LoxInstance {
     klass_name: ClassName,
     klass: LoxCallable,
+    fields: HashMap<String, Literal>,
 }
 
 impl Display for LoxInstance {
@@ -130,6 +133,24 @@ impl Display for LoxInstance {
 
 impl LoxInstance {
     fn new(klass_name: ClassName, klass: LoxCallable) -> Self {
-        Self { klass_name, klass }
+        Self {
+            klass_name,
+            klass,
+            fields: Default::default(),
+        }
+    }
+
+    pub fn get(&self, name: &Token) -> Result<Literal, RuntimeError> {
+        match self.fields.get(&name.lexeme) {
+            Some(l) => Ok(l.clone()),
+            None => Err(RuntimeError::PropertyError {
+                line: name.line,
+                msg: format!("undefined property '{}'.", name.lexeme),
+            }),
+        }
+    }
+
+    pub fn set(&mut self, name: &Token, value: &Literal) {
+        self.fields.insert(name.lexeme.clone(), value.clone());
     }
 }

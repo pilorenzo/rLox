@@ -252,6 +252,12 @@ impl<'a> Parser<'a> {
             let value = Box::new(self.assignment()?);
             if let Expr::Variable { name } = expr {
                 Ok(Expr::Assignment { name, value })
+            } else if let Expr::Get { object, name } = expr {
+                Ok(Expr::Set {
+                    object,
+                    name,
+                    value,
+                })
             } else {
                 /* in lox there is no throw in this case, the error is only reported */
                 Err(self.error(equals, "Invalid assignment target".to_owned()))
@@ -375,6 +381,10 @@ impl<'a> Parser<'a> {
         loop {
             if self.match_type(vec![LeftParen]) {
                 expr = self.finish_call(expr)?;
+            } else if self.match_type(vec![Dot]) {
+                let name = self.consume(Identifier, "Expect property name after '.'.")?;
+                let object = Box::new(expr);
+                expr = Expr::Get { object, name };
             } else {
                 break;
             }

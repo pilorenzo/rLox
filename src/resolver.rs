@@ -56,6 +56,12 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
             Expr::Assignment { name, value } => self.visit_assignment_expression(expr, name, value),
             Expr::Grouping { expression } => self.visit_grouping_expression(expression),
             Expr::Unary { operator: _, right } => self.visit_unary_expression(right),
+            Expr::Get { object, name: _ } => self.visit_get_expression(object),
+            Expr::Set {
+                object,
+                name: _,
+                value,
+            } => self.visit_set_expression(object, value),
             Expr::Logical {
                 left,
                 operator: _,
@@ -238,5 +244,14 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
     fn visit_class(&mut self, name: &Token, methods: &[FunctionDeclaration]) {
         self.declare(name);
         self.define(name);
+    }
+
+    fn visit_get_expression(&mut self, object: &Expr) {
+        self.visit_expression(object);
+    }
+
+    fn visit_set_expression(&mut self, object: &Expr, value: &Expr) {
+        self.visit_expression(value);
+        self.visit_expression(object);
     }
 }

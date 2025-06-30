@@ -37,6 +37,15 @@ pub enum Expr {
         paren: Token,
         args: Vec<Expr>,
     },
+    Get {
+        object: Box<Expr>,
+        name: Token,
+    },
+    Set {
+        object: Box<Expr>,
+        name: Token,
+        value: Box<Expr>,
+    },
 }
 
 impl Display for Expr {
@@ -59,6 +68,12 @@ impl Display for Expr {
             Expr::Unary { operator, right } => write!(f, "Literal {{ {operator}, {right} }}"),
             Expr::Variable { name } => write!(f, "Variable {name}"),
             Expr::Assignment { name, value } => write!(f, "Assignment of {value} to {name}"),
+            Expr::Get { name, object: _ } => write!(f, "Get {name}"),
+            Expr::Set {
+                name,
+                object: _,
+                value,
+            } => write!(f, "Set {name} to {value}"),
             Expr::Call {
                 callee,
                 paren: _,
