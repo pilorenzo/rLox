@@ -35,13 +35,6 @@ pub enum EnvironmentNode {
 }
 
 impl EnvironmentNode {
-    // pub fn contains(&self, name: &str) -> bool {
-    //     match self {
-    //         EnvironmentNode::Standard { env } => env.dict.contains_key(name),
-    //         EnvironmentNode::Closure { env } => env.borrow().dict.contains_key(name),
-    //     }
-    // }
-    //
     pub fn get_literal(&self, name: &str) -> Literal {
         // println!("Searched variable {name}\n\n");
         // println!("Inside {}", self);
@@ -94,20 +87,6 @@ impl EnvironmentGraph {
         }
     }
 
-    // pub fn get(&self, token: &Token) -> Result<Literal, RuntimeError> {
-    //     let name = &token.lexeme;
-    //     for env in self.envs.iter().rev() {
-    //         if env.contains(name) {
-    //             return Ok(env.get_literal(name));
-    //         }
-    //     }
-    //
-    //     Err(RuntimeError::IdentifierError {
-    //         line: token.line,
-    //         msg: format!("Undefined variable '{name}'."),
-    //     })
-    // }
-    //
     pub fn assign(&mut self, token: Token, value: Literal) -> Result<(), RuntimeError> {
         let name = &token.lexeme;
         for environment in self.envs.iter_mut().rev() {
@@ -174,10 +153,22 @@ impl EnvironmentGraph {
     pub fn get_at(&mut self, distance: &usize, name: &Token) -> Result<Literal, RuntimeError> {
         match self.envs.get(*distance) {
             Some(env) => Ok(env.get_literal(&name.lexeme)),
-            None => Err(RuntimeError::UndefinedVariable {
-                line: name.line,
-                msg: format!("Can't get variable {name} in selected scope {distance}"),
-            }),
+            None => {
+                // println!("\n\n###########################");
+                // let mut result = String::default();
+                // for (i, e) in self.envs.iter().enumerate() {
+                //     result += &format!("Environment {i}:\n{e}");
+                // }
+                // println!("{result}");
+                // println!("-------------------------------");
+                // println!("distance {distance}, envs {}", self.envs.len());
+                // println!("###########################\n\n");
+                // panic!("Can't get variable {name} in selected scope {distance}");
+                Err(RuntimeError::UndefinedVariable {
+                    line: name.line,
+                    msg: format!("Can't get variable {name} in selected scope {distance}"),
+                })
+            }
         }
     }
 

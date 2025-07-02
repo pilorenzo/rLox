@@ -433,6 +433,10 @@ impl<'a> Parser<'a> {
             Ok(Expr::Literal {
                 value: self.previous().literal,
             })
+        } else if self.match_type(vec![This]) {
+            Ok(Expr::This {
+                keyword: self.previous(),
+            })
         } else if self.match_type(vec![Identifier]) {
             Ok(Expr::Variable {
                 name: self.previous(),

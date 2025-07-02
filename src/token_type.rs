@@ -1,6 +1,8 @@
 use std::{
+    cell::RefCell,
     fmt::{Debug, Display},
     hash::Hash,
+    rc::Rc,
 };
 
 use crate::lox_callable::{LoxCallable, LoxInstance};
@@ -126,7 +128,7 @@ pub enum Literal {
     Null,
     Boolean(bool),
     Callable(Box<LoxCallable>),
-    Class(Box<LoxInstance>),
+    Class(Rc<RefCell<LoxInstance>>),
 }
 
 impl Display for Literal {
@@ -137,7 +139,7 @@ impl Display for Literal {
             Self::Null => "nil".to_owned(),
             Self::Boolean(b) => b.to_string(),
             Self::Callable(f) => f.to_string(),
-            Self::Class(i) => i.to_string(),
+            Self::Class(i) => i.borrow().to_string(),
         };
         write!(f, "{}", value)
     }

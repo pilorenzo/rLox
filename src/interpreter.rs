@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::environment::EnvironmentGraph;
-use crate::lox_callable::{ClassName, LoxFunction};
+use crate::lox_callable::{LoxClass, LoxFunction, LoxInstance};
 use crate::{
     environment::Environment, expression::Expr, lox_callable::LoxCallable, statement::Stmt,
     Literal, TokenType,
@@ -98,14 +99,22 @@ impl Interpreter {
                 let value = self.visit_expression(value)?;
                 return Err(RuntimeError::Return { value });
             }
-            Stmt::Class { name, methods: _ } => {
-                // let name = &token.lexeme;
+            Stmt::Class { name, methods } => {
                 self.graph.define(name.lexeme.clone(), Literal::Null);
-                let klass = LoxCallable::Class {
-                    name: ClassName(name.lexeme.clone()),
+
+                let mut runtime_methods: HashMap<_, _> = Default::default();
+                let closure = self.graph.change_last_to_closure();
+                for method in methods {
+                    let name = method.name.lexeme.clone();
+                    let func = LoxFunction::new(method.clone(), Rc::clone(&closure));
+                    runtime_methods.insert(name, func);
+                }
+
+                let class = LoxCallable::Class {
+                    class: LoxClass::new(name.lexeme.clone(), runtime_methods),
                 };
-                let klass = Box::new(klass);
-                self.graph.assign(name.clone(), Literal::Callable(klass))?;
+                let class = Box::new(class);
+                self.graph.assign(name.clone(), Literal::Callable(class))?;
             }
         }
         Ok(())
@@ -231,9 +240,10 @@ impl Interpreter {
                 function.call(self, arguments)?
             }
             Expr::Get { object, name } => {
+                // println!("Get Expr visited");
                 let object = self.visit_expression(object)?;
                 if let Literal::Class(instance) = object {
-                    instance.get(name)?
+                    LoxInstance::get(self, instance, name)? // instance.get(name)?
                 } else {
                     return Err(RuntimeError::PropertyError {
                         line: name.line,
@@ -246,10 +256,11 @@ impl Interpreter {
                 name,
                 value,
             } => {
+                // println!("Set Expr visited");
                 let object = self.visit_expression(object)?;
-                if let Literal::Class(mut instance) = object {
+                if let Literal::Class(instance) = object {
                     let value = self.visit_expression(value)?;
-                    instance.set(name, &value);
+                    instance.borrow_mut().set(name, &value);
                     value
                 } else {
                     return Err(RuntimeError::PropertyError {
@@ -258,6 +269,10 @@ impl Interpreter {
                     });
                 }
             }
+            Expr::This { keyword } => match self.locals.get(expression) {
+                Some(distance) => self.graph.get_at(distance, keyword)?,
+                None => self.graph.envs[0].get_literal(&keyword.lexeme),
+            },
         };
         Ok(literal)
     }

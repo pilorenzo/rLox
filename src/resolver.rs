@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use crate::{
     expression::Expr,
@@ -12,6 +12,13 @@ use crate::{
 pub enum FunctionType {
     None,
     Function,
+    Method,
+}
+
+#[derive(Clone, Copy)]
+pub enum ClassType {
+    None,
+    Class,
 }
 
 pub struct Resolver<'lox, 'int> {
@@ -19,6 +26,13 @@ pub struct Resolver<'lox, 'int> {
     interpreter: &'int mut Interpreter,
     scopes: Vec<HashMap<String, bool>>,
     current_function: FunctionType,
+    current_class: ClassType,
+}
+
+impl<'lox, 'int> Display for Resolver<'lox, 'int> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.scopes)
+    }
 }
 
 impl<'lox, 'int> Resolver<'lox, 'int> {
@@ -28,6 +42,7 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
             interpreter,
             scopes: Default::default(),
             current_function: FunctionType::None,
+            current_class: ClassType::None,
         }
     }
 
@@ -56,6 +71,7 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
             Expr::Assignment { name, value } => self.visit_assignment_expression(expr, name, value),
             Expr::Grouping { expression } => self.visit_grouping_expression(expression),
             Expr::Unary { operator: _, right } => self.visit_unary_expression(right),
+            Expr::This { keyword } => self.visit_this_expression(expr, keyword),
             Expr::Get { object, name: _ } => self.visit_get_expression(object),
             Expr::Set {
                 object,
@@ -135,6 +151,7 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
         if let Some(scope) = self.scopes.last_mut() {
             scope.insert(name.lexeme.clone(), true);
         }
+        // println!("Resolving {}", self);
     }
 
     fn resolve_local(&mut self, expr: &Expr, name: &Token) {
@@ -170,13 +187,13 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
     fn resolve_function(&mut self, declaration: &FunctionDeclaration, func_type: FunctionType) {
         let enclosing_func = self.current_function;
         self.current_function = func_type;
-        self.begin_scope();
+        // self.begin_scope();
         for param in declaration.params.iter() {
             self.declare(param);
             self.define(param);
         }
         self.visit_block(&declaration.body);
-        self.end_scope();
+        // self.end_scope();
         self.current_function = enclosing_func;
     }
 
@@ -242,8 +259,24 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
     }
 
     fn visit_class(&mut self, name: &Token, methods: &[FunctionDeclaration]) {
+        let enclosing_class = self.current_class;
+        self.current_class = ClassType::Class;
+
         self.declare(name);
         self.define(name);
+        self.begin_scope();
+        self.scopes
+            .last_mut()
+            .unwrap()
+            .insert("this".to_owned(), true);
+
+        for method in methods {
+            let func_type = FunctionType::Method;
+            self.resolve_function(method, func_type);
+        }
+        self.end_scope();
+
+        self.current_class = enclosing_class;
     }
 
     fn visit_get_expression(&mut self, object: &Expr) {
@@ -253,5 +286,14 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
     fn visit_set_expression(&mut self, object: &Expr, value: &Expr) {
         self.visit_expression(value);
         self.visit_expression(object);
+    }
+
+    fn visit_this_expression(&mut self, expr: &Expr, keyword: &Token) {
+        if let ClassType::None = self.current_class {
+            self.lox
+                .error(keyword.line, "Can't use this outside of a class")
+        } else {
+            self.resolve_local(expr, keyword)
+        }
     }
 }
