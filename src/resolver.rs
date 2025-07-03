@@ -12,6 +12,7 @@ use crate::{
 pub enum FunctionType {
     None,
     Function,
+    Initializer,
     Method,
 }
 
@@ -216,7 +217,13 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
             Expr::Literal {
                 value: Literal::Null,
             } => {}
-            _ => self.visit_expression(value),
+            _ => {
+                if let FunctionType::Initializer = self.current_function {
+                    let message = "Can't return value from initializer";
+                    self.lox.error(keyword.line, message);
+                }
+                self.visit_expression(value);
+            }
         }
     }
 
@@ -271,7 +278,11 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
             .insert("this".to_owned(), true);
 
         for method in methods {
-            let func_type = FunctionType::Method;
+            let func_type = if method.name.lexeme == "init" {
+                FunctionType::Initializer
+            } else {
+                FunctionType::Method
+            };
             self.resolve_function(method, func_type);
         }
         self.end_scope();

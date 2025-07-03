@@ -17,20 +17,22 @@ use crate::{
 pub struct LoxFunction {
     declaration: FunctionDeclaration,
     closure: Rc<RefCell<Environment>>,
+    is_initializer: bool,
 }
 impl LoxFunction {
-    pub fn new(declaration: FunctionDeclaration, closure: Rc<RefCell<Environment>>) -> Self {
+    pub fn new(
+        declaration: FunctionDeclaration,
+        closure: Rc<RefCell<Environment>>,
+        is_initializer: bool,
+    ) -> Self {
         Self {
             declaration,
             closure,
+            is_initializer,
         }
     }
 
-    pub fn is_closure_env_in_graph(
-        &self,
-        interpreter: &mut Interpreter,
-        // function: &LoxFunction,
-    ) -> bool {
+    pub fn is_closure_env_in_graph(&self, interpreter: &mut Interpreter) -> bool {
         let mut result = false;
         let outer = interpreter.graph.envs.last();
         if let Some(EnvironmentNode::Closure { env }) = outer {
@@ -53,7 +55,56 @@ impl LoxFunction {
         Self {
             declaration: self.declaration.clone(),
             closure,
+            is_initializer: self.is_initializer,
         }
+    }
+
+    pub fn call(
+        &self,
+        interpreter: &mut Interpreter,
+        arguments: Vec<Literal>,
+    ) -> Result<Literal, RuntimeError> {
+        let is_closure_in_graph = self.is_closure_env_in_graph(interpreter);
+        if !is_closure_in_graph {
+            interpreter.graph.envs.push(EnvironmentNode::Closure {
+                env: Rc::clone(&self.closure),
+            });
+        }
+        interpreter.graph.push(Environment::new());
+        for (param, arg) in self.declaration.params.iter().zip(arguments.iter()) {
+            interpreter.graph.define(param.lexeme.clone(), arg.clone())
+        }
+        // println!("\n\n###########################");
+        // print!("Interpreter \n{interpreter}");
+        // println!("---------------------------");
+        // print!("Closure env :\n{}", self.closure.borrow());
+        // println!("###########################\n\n");
+        // println!("Function name {}", &self.declaration.name);
+        // println!("Is initializer? {}", &self.is_initializer);
+        let block_res = interpreter.execute_block(&self.declaration.body);
+        // println!("Block result {block_res:?}");
+        let res = match block_res {
+            Err(RuntimeError::Return { value }) => {
+                if self.is_initializer {
+                    Ok(self.closure.borrow().get_literal("this"))
+                } else {
+                    Ok(value)
+                }
+            }
+            Err(e) => Err(e),
+            Ok(()) => {
+                if self.is_initializer {
+                    Ok(self.closure.borrow().get_literal("this"))
+                } else {
+                    Ok(Literal::Null)
+                }
+            }
+        };
+        interpreter.graph.envs.pop();
+        if !is_closure_in_graph {
+            interpreter.graph.envs.pop();
+        }
+        res
     }
 }
 
@@ -110,7 +161,13 @@ impl LoxCallable {
         match self {
             LoxCallable::Anonymous { arity, func: _ } => *arity,
             LoxCallable::Function { function } => function.declaration.params.len(),
-            LoxCallable::Class { class: _ } => 0,
+            LoxCallable::Class { class } => {
+                if let Some(function) = class.find_method("init") {
+                    function.declaration.params.len()
+                } else {
+                    0
+                }
+            }
         }
     }
 
@@ -121,36 +178,16 @@ impl LoxCallable {
     ) -> Result<Literal, RuntimeError> {
         match self {
             LoxCallable::Anonymous { arity: _, func } => Ok((func)(arguments)),
-            LoxCallable::Function { function } => {
-                let is_closure_in_graph = function.is_closure_env_in_graph(interpreter);
-                if !is_closure_in_graph {
-                    interpreter.graph.envs.push(EnvironmentNode::Closure {
-                        env: Rc::clone(&function.closure),
-                    });
+            LoxCallable::Function { function } => function.call(interpreter, arguments),
+            LoxCallable::Class { class } => {
+                let instance = Rc::new(RefCell::new(LoxInstance::new(class.clone())));
+                if let Some(initializer) = class.find_method("init") {
+                    initializer
+                        .bind(interpreter, Rc::clone(&instance))
+                        .call(interpreter, arguments)?;
                 }
-                interpreter.graph.push(Environment::new());
-                for (param, arg) in function.declaration.params.iter().zip(arguments.iter()) {
-                    interpreter.graph.define(param.lexeme.clone(), arg.clone())
-                }
-                // println!("\n\n###########################");
-                // print!("Interpreter \n{interpreter}");
-                // println!("---------------------------");
-                // print!("Closure env :\n{}", function.closure.borrow());
-                // println!("###########################\n\n");
-                let res = match interpreter.execute_block(&function.declaration.body) {
-                    Err(RuntimeError::Return { value }) => Ok(value),
-                    Err(e) => Err(e),
-                    Ok(()) => Ok(Literal::Null),
-                };
-                interpreter.graph.envs.pop();
-                if !is_closure_in_graph {
-                    interpreter.graph.envs.pop();
-                }
-                res
+                Ok(Literal::Class(instance))
             }
-            LoxCallable::Class { class } => Ok(Literal::Class(Rc::new(RefCell::new(
-                LoxInstance::new(class.clone()),
-            )))),
         }
     }
 }

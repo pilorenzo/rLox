@@ -16,6 +16,13 @@ impl Environment {
     pub fn define(&mut self, name: String, value: Literal) {
         self.dict.insert(name, value);
     }
+
+    pub fn get_literal(&self, name: &str) -> Literal {
+        self.dict
+            .get(name)
+            .unwrap_or_else(|| panic!("No entry found for key '{name}'"))
+            .clone()
+    }
 }
 
 impl Display for Environment {
@@ -36,11 +43,9 @@ pub enum EnvironmentNode {
 
 impl EnvironmentNode {
     pub fn get_literal(&self, name: &str) -> Literal {
-        // println!("Searched variable {name}\n\n");
-        // println!("Inside {}", self);
         match self {
-            EnvironmentNode::Standard { env } => env.dict[name].clone(),
-            EnvironmentNode::Closure { env } => env.borrow().dict[name].clone(),
+            EnvironmentNode::Standard { env } => env.get_literal(name),
+            EnvironmentNode::Closure { env } => env.borrow().get_literal(name),
         }
     }
 

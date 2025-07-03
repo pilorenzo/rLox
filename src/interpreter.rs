@@ -10,6 +10,7 @@ use crate::{
     Literal, TokenType,
 };
 
+#[derive(Debug)]
 pub enum RuntimeError {
     InvalidOperationError { line: i32, msg: String },
     // IdentifierError { line: i32, msg: String },
@@ -88,7 +89,7 @@ impl Interpreter {
             Stmt::Fun { declaration } => {
                 let dec = (*declaration).clone();
                 let closure = self.graph.change_last_to_closure();
-                let function = LoxFunction::new(dec, closure);
+                let function = LoxFunction::new(dec, closure, false);
                 let function = LoxCallable::Function { function };
                 self.graph.define(
                     declaration.name.lexeme.clone(),
@@ -106,7 +107,11 @@ impl Interpreter {
                 let closure = self.graph.change_last_to_closure();
                 for method in methods {
                     let name = method.name.lexeme.clone();
-                    let func = LoxFunction::new(method.clone(), Rc::clone(&closure));
+                    let func = LoxFunction::new(
+                        method.clone(),
+                        Rc::clone(&closure),
+                        method.name.lexeme == "init",
+                    );
                     runtime_methods.insert(name, func);
                 }
 
