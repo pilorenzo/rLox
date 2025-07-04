@@ -43,6 +43,15 @@ impl<'a> Parser<'a> {
 
     fn class_declaration(&mut self) -> Result<Stmt, ParseError> {
         let name = self.consume(Identifier, "Expect class name")?;
+
+        let mut superclass = None;
+        if self.match_type(vec![Less]) {
+            self.consume(Identifier, "Expect superclass name")?;
+            superclass = Some(Box::new(Expr::Variable {
+                name: self.previous(),
+            }))
+        }
+
         self.consume(LeftBrace, "Expect '{' before class body")?;
         let mut methods = vec![];
         while !self.check(RightBrace) && !self.is_at_end() {
@@ -54,7 +63,11 @@ impl<'a> Parser<'a> {
             }
         }
         self.consume(RightBrace, "Expect '}' after class body")?;
-        Ok(Stmt::Class { name, methods })
+        Ok(Stmt::Class {
+            name,
+            methods,
+            superclass,
+        })
     }
 
     fn function(&mut self, kind: &str) -> Result<Stmt, ParseError> {

@@ -100,7 +100,34 @@ impl Interpreter {
                 let value = self.visit_expression(value)?;
                 return Err(RuntimeError::Return { value });
             }
-            Stmt::Class { name, methods } => {
+            Stmt::Class {
+                name,
+                methods,
+                superclass,
+            } => {
+                // let mut sup_class = None;
+                let mut super_lox_class = None;
+                if let Some(superclass) = superclass {
+                    let sup_class = Some(self.visit_expression(superclass)?);
+                    let Expr::Variable { name } = &(**superclass) else {
+                        panic!("superclass is not a variable");
+                    };
+                    let throw = || {
+                        Err(RuntimeError::InvalidOperationError {
+                            line: name.line,
+                            msg: format!("Superclass of {name} must be a class"),
+                        })
+                    };
+                    match sup_class {
+                        Some(Literal::Callable(c)) => match *c {
+                            LoxCallable::Class { class: cl } => {
+                                super_lox_class = Some(Box::new(cl))
+                            }
+                            _ => return throw(),
+                        },
+                        _ => return throw(),
+                    }
+                }
                 self.graph.define(name.lexeme.clone(), Literal::Null);
 
                 let mut runtime_methods: HashMap<_, _> = Default::default();
@@ -116,7 +143,7 @@ impl Interpreter {
                 }
 
                 let class = LoxCallable::Class {
-                    class: LoxClass::new(name.lexeme.clone(), runtime_methods),
+                    class: LoxClass::new(name.lexeme.clone(), super_lox_class, runtime_methods),
                 };
                 let class = Box::new(class);
                 self.graph.assign(name.clone(), Literal::Callable(class))?;

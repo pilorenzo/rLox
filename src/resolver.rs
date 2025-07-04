@@ -52,7 +52,11 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
             Stmt::Block { statements } => self.visit_block(statements),
             Stmt::Var { name, initializer } => self.visit_var(name, initializer),
             Stmt::Fun { declaration } => self.visit_func(declaration),
-            Stmt::Class { name, methods } => self.visit_class(name, methods),
+            Stmt::Class {
+                name,
+                methods,
+                superclass,
+            } => self.visit_class(name, methods, superclass),
             Stmt::Expression { expression } => self.visit_expr_statement(expression),
             Stmt::Print { expression } => self.visit_print(expression),
             Stmt::Return { keyword, value } => self.visit_return(keyword, value),
@@ -265,12 +269,28 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
         self.visit_expression(right);
     }
 
-    fn visit_class(&mut self, name: &Token, methods: &[FunctionDeclaration]) {
+    fn visit_class(
+        &mut self,
+        name: &Token,
+        methods: &[FunctionDeclaration],
+        superclass: &Option<Box<Expr>>,
+    ) {
         let enclosing_class = self.current_class;
         self.current_class = ClassType::Class;
 
         self.declare(name);
         self.define(name);
+
+        if let Some(superclass) = superclass {
+            if let Expr::Variable { name: sup_name } = &(**superclass) {
+                if sup_name.lexeme == name.lexeme {
+                    let message = "A class can't inherit from itself";
+                    self.lox.error(sup_name.line, message);
+                }
+            }
+            self.visit_expression(superclass);
+        }
+
         self.begin_scope();
         self.scopes
             .last_mut()

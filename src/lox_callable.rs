@@ -134,19 +134,29 @@ pub enum LoxCallable {
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoxClass {
     name: ClassName,
+    superclass: Option<Box<LoxClass>>,
     methods: HashMap<String, LoxFunction>,
 }
 
 impl LoxClass {
-    pub fn new(name: String, methods: HashMap<String, LoxFunction>) -> Self {
+    pub fn new(
+        name: String,
+        superclass: Option<Box<LoxClass>>,
+        methods: HashMap<String, LoxFunction>,
+    ) -> Self {
         Self {
             name: ClassName(name),
+            superclass,
             methods,
         }
     }
 
     pub fn find_method(&self, lexeme: &str) -> Option<&LoxFunction> {
-        self.methods.get(lexeme)
+        let class_method = self.methods.get(lexeme);
+        match (class_method, &self.superclass) {
+            (None, Some(sup_class)) => sup_class.find_method(lexeme),
+            _ => class_method,
+        }
     }
 }
 
