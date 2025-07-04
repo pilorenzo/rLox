@@ -49,6 +49,10 @@ pub enum Expr {
     This {
         keyword: Token,
     },
+    Super {
+        keyword: Token,
+        method: Token,
+    },
 }
 
 impl Display for Expr {
@@ -72,6 +76,9 @@ impl Display for Expr {
             Expr::Variable { name } => write!(f, "Variable {name}"),
             Expr::Assignment { name, value } => write!(f, "Assignment of {value} to {name}"),
             Expr::This { keyword } => write!(f, "Current class instance keyword {keyword}"),
+            Expr::Super { keyword, method } => {
+                write!(f, "Super class {keyword}, with method {method}")
+            }
             Expr::Get { name, object: _ } => write!(f, "Get {name}"),
             Expr::Set {
                 name,

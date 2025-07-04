@@ -446,6 +446,11 @@ impl<'a> Parser<'a> {
             Ok(Expr::Literal {
                 value: self.previous().literal,
             })
+        } else if self.match_type(vec![Super]) {
+            let keyword = self.previous();
+            self.consume(Dot, "Expect '.' after 'super'")?;
+            let method = self.consume(Identifier, "Expect a method name of the superclass")?;
+            Ok(Expr::Super { keyword, method })
         } else if self.match_type(vec![This]) {
             Ok(Expr::This {
                 keyword: self.previous(),

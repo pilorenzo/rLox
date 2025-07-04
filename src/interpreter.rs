@@ -5,6 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::environment::EnvironmentGraph;
 use crate::lox_callable::{LoxClass, LoxFunction, LoxInstance};
+use crate::token_type::Token;
 use crate::{
     environment::Environment, expression::Expr, lox_callable::LoxCallable, statement::Stmt,
     Literal, TokenType,
@@ -107,9 +108,9 @@ impl Interpreter {
             } => {
                 // let mut sup_class = None;
                 let mut super_lox_class = None;
-                if let Some(superclass) = superclass {
-                    let sup_class = Some(self.visit_expression(superclass)?);
-                    let Expr::Variable { name } = &(**superclass) else {
+                if let Some(sc) = superclass {
+                    let sup_class = Some(self.visit_expression(sc)?);
+                    let Expr::Variable { name } = &(**sc) else {
                         panic!("superclass is not a variable");
                     };
                     let throw = || {
@@ -130,6 +131,15 @@ impl Interpreter {
                 }
                 self.graph.define(name.lexeme.clone(), Literal::Null);
 
+                if let Some(ref class) = super_lox_class {
+                    self.graph.push(Environment::new());
+                    let class = Box::new(LoxCallable::Class {
+                        class: *class.clone(),
+                    });
+                    self.graph
+                        .define("super".to_owned(), Literal::Callable(class));
+                }
+
                 let mut runtime_methods: HashMap<_, _> = Default::default();
                 let closure = self.graph.change_last_to_closure();
                 for method in methods {
@@ -146,6 +156,10 @@ impl Interpreter {
                     class: LoxClass::new(name.lexeme.clone(), super_lox_class, runtime_methods),
                 };
                 let class = Box::new(class);
+
+                if superclass.is_some() {
+                    self.graph.pop();
+                }
                 self.graph.assign(name.clone(), Literal::Callable(class))?;
             }
         }
@@ -305,6 +319,42 @@ impl Interpreter {
                 Some(distance) => self.graph.get_at(distance, keyword)?,
                 None => self.graph.envs[0].get_literal(&keyword.lexeme),
             },
+            Expr::Super { keyword, method } => {
+                let distance = self
+                    .locals
+                    .get(expression)
+                    .expect("super expression not found in interpreter locals");
+
+                let superclass_literal = self.graph.get_at(distance, keyword)?;
+                let mut superclass = None;
+                if let Literal::Callable(boxed_class) = superclass_literal {
+                    if let LoxCallable::Class { class } = *boxed_class {
+                        superclass = Some(class);
+                    }
+                }
+                let false_token =
+                    Token::new(TokenType::Identifier, "this", Literal::Null, keyword.line);
+                let distance = &(distance + 1usize);
+                let instance = self.graph.get_at(distance, &false_token)?;
+                let Literal::Class(instance) = instance else {
+                    panic!("'this' not found at distance {distance}");
+                };
+
+                let Some(superclass) = superclass else {
+                    panic!("superclass not found in line {}", keyword.line);
+                };
+
+                let func = superclass.find_method(&method.lexeme);
+
+                let Some(function) = func else {
+                    return Err(RuntimeError::PropertyError {
+                        line: method.line,
+                        msg: format!("undefined property '{}'.", method.lexeme),
+                    });
+                };
+                let function = function.bind(self, instance);
+                Literal::Callable(Box::new(LoxCallable::Function { function }))
+            }
         };
         Ok(literal)
     }

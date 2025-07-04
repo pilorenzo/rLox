@@ -20,6 +20,7 @@ pub enum FunctionType {
 pub enum ClassType {
     None,
     Class,
+    SubClass,
 }
 
 pub struct Resolver<'lox, 'int> {
@@ -77,6 +78,7 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
             Expr::Grouping { expression } => self.visit_grouping_expression(expression),
             Expr::Unary { operator: _, right } => self.visit_unary_expression(right),
             Expr::This { keyword } => self.visit_this_expression(expr, keyword),
+            Expr::Super { keyword, method: _ } => self.visit_super_expression(expr, keyword),
             Expr::Get { object, name: _ } => self.visit_get_expression(object),
             Expr::Set {
                 object,
@@ -281,14 +283,23 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
         self.declare(name);
         self.define(name);
 
-        if let Some(superclass) = superclass {
-            if let Expr::Variable { name: sup_name } = &(**superclass) {
+        if let Some(sup_class) = superclass {
+            if let Expr::Variable { name: sup_name } = &(**sup_class) {
                 if sup_name.lexeme == name.lexeme {
                     let message = "A class can't inherit from itself";
                     self.lox.error(sup_name.line, message);
                 }
             }
-            self.visit_expression(superclass);
+
+            self.current_class = ClassType::SubClass;
+
+            self.visit_expression(sup_class);
+
+            self.begin_scope();
+            self.scopes
+                .last_mut()
+                .unwrap()
+                .insert("super".to_owned(), true);
         }
 
         self.begin_scope();
@@ -306,6 +317,10 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
             self.resolve_function(method, func_type);
         }
         self.end_scope();
+
+        if superclass.is_some() {
+            self.end_scope();
+        }
 
         self.current_class = enclosing_class;
     }
@@ -326,5 +341,20 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
         } else {
             self.resolve_local(expr, keyword)
         }
+    }
+
+    fn visit_super_expression(&mut self, expr: &Expr, keyword: &Token) {
+        match self.current_class {
+            ClassType::None => {
+                let msg = "Can't use 'super' outside of a class";
+                self.lox.error(keyword.line, msg);
+            }
+            ClassType::Class => {
+                let msg = "Can't use 'super' in a class without superclass";
+                self.lox.error(keyword.line, msg);
+            }
+            ClassType::SubClass => {}
+        }
+        self.resolve_local(expr, keyword);
     }
 }
