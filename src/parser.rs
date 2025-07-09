@@ -26,26 +26,31 @@ impl<'a> Parser<'a> {
             statements.push(self.declaration()?);
         }
         Ok(statements)
-        // self.expression();
     }
 
     fn declaration(&mut self) -> Result<Stmt, ParseError> {
-        if self.match_type(vec![Class]) {
+        let res = if self.match_type(Class) {
             self.class_declaration()
-        } else if self.match_type(vec![Fun]) {
+        } else if self.match_type(Fun) {
             self.function("function")
-        } else if self.match_type(vec![Var]) {
+        } else if self.match_type(Var) {
             self.var_declaration()
         } else {
             self.statement()
+        };
+
+        if res.is_err() {
+            self.synchronize();
         }
+
+        res
     }
 
     fn class_declaration(&mut self) -> Result<Stmt, ParseError> {
         let name = self.consume(Identifier, "Expect class name")?;
 
         let mut superclass = None;
-        if self.match_type(vec![Less]) {
+        if self.match_type(Less) {
             self.consume(Identifier, "Expect superclass name")?;
             superclass = Some(Box::new(Expr::Variable {
                 name: self.previous(),
@@ -81,7 +86,7 @@ impl<'a> Parser<'a> {
                         .error(self.peek().line, "Can't have more than 16 parameters");
                 }
                 params.push(self.consume(Identifier, "Expect parameter name.")?);
-                if !self.match_type(vec![Comma]) {
+                if !self.match_type(Comma) {
                     break;
                 }
             }
@@ -96,7 +101,7 @@ impl<'a> Parser<'a> {
 
     fn var_declaration(&mut self) -> Result<Stmt, ParseError> {
         let name = self.consume(Identifier, "Expect variable name")?;
-        let initializer = if self.match_type(vec![Equal]) {
+        let initializer = if self.match_type(Equal) {
             self.expression()?
         } else {
             Expr::Literal {
@@ -111,17 +116,17 @@ impl<'a> Parser<'a> {
     }
 
     fn statement(&mut self) -> Result<Stmt, ParseError> {
-        if self.match_type(vec![For]) {
+        if self.match_type(For) {
             self.for_statement()
-        } else if self.match_type(vec![If]) {
+        } else if self.match_type(If) {
             self.if_statement()
-        } else if self.match_type(vec![Return]) {
+        } else if self.match_type(Return) {
             self.return_statement()
-        } else if self.match_type(vec![Print]) {
+        } else if self.match_type(Print) {
             self.print_statement()
-        } else if self.match_type(vec![While]) {
+        } else if self.match_type(While) {
             self.while_statement()
-        } else if self.match_type(vec![LeftBrace]) {
+        } else if self.match_type(LeftBrace) {
             Ok(Stmt::Block {
                 statements: self.block()?,
             })
@@ -133,9 +138,9 @@ impl<'a> Parser<'a> {
     fn for_statement(&mut self) -> Result<Stmt, ParseError> {
         self.consume(LeftParen, "Expect '(' after 'for'.")?;
 
-        let initializer = if self.match_type(vec![Semicolon]) {
+        let initializer = if self.match_type(Semicolon) {
             Option::None
-        } else if self.match_type(vec![Var]) {
+        } else if self.match_type(Var) {
             Some(self.var_declaration()?)
         } else {
             Some(self.expression_statement()?)
@@ -192,7 +197,7 @@ impl<'a> Parser<'a> {
         let condition = Box::new(self.expression()?);
         self.consume(RightParen, "Expect ')' after if condition.")?;
         let then_stmt = Box::new(self.statement()?);
-        let else_stmt = if self.match_type(vec![Else]) {
+        let else_stmt = if self.match_type(Else) {
             Some(Box::new(self.statement()?))
         } else {
             None
@@ -257,32 +262,29 @@ impl<'a> Parser<'a> {
     }
 
     fn assignment(&mut self) -> Result<Expr, ParseError> {
-        // let expr = self.equality()?;
-        let expr = self.or()?;
+        let mut expr = self.or()?;
 
-        if self.match_type(vec![Equal]) {
+        if self.match_type(Equal) {
             let equals = self.previous();
             let value = Box::new(self.assignment()?);
             if let Expr::Variable { name } = expr {
-                Ok(Expr::Assignment { name, value })
+                expr = Expr::Assignment { name, value };
             } else if let Expr::Get { object, name } = expr {
-                Ok(Expr::Set {
+                expr = Expr::Set {
                     object,
                     name,
                     value,
-                })
+                };
             } else {
-                /* in lox there is no throw in this case, the error is only reported */
-                Err(self.error(equals, "Invalid assignment target".to_owned()))
+                self.error(equals, "Invalid assignment target");
             }
-        } else {
-            Ok(expr)
         }
+        Ok(expr)
     }
 
     fn or(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.and()?;
-        while self.match_type(vec![Or]) {
+        while self.match_type(Or) {
             let operator = self.previous();
             let right = self.and()?;
             expr = Expr::Logical {
@@ -296,7 +298,7 @@ impl<'a> Parser<'a> {
 
     fn and(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.equality()?;
-        while self.match_type(vec![And]) {
+        while self.match_type(And) {
             let operator = self.previous();
             let right = self.equality()?;
             expr = Expr::Logical {
@@ -310,7 +312,7 @@ impl<'a> Parser<'a> {
 
     fn equality(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.comparison()?;
-        while self.match_type(vec![BangEqual, EqualEqual]) {
+        while self.match_types(vec![BangEqual, EqualEqual]) {
             let operator = self.previous();
             let right = self.comparison()?;
             expr = Expr::Binary {
@@ -326,7 +328,7 @@ impl<'a> Parser<'a> {
 
     fn comparison(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.term()?;
-        while self.match_type(vec![Greater, GreaterEqual, Less, LessEqual]) {
+        while self.match_types(vec![Greater, GreaterEqual, Less, LessEqual]) {
             let operator = self.previous();
             let right = self.term()?;
             expr = Expr::Binary {
@@ -342,7 +344,7 @@ impl<'a> Parser<'a> {
 
     fn term(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.factor()?;
-        while self.match_type(vec![Minus, Plus]) {
+        while self.match_types(vec![Minus, Plus]) {
             let operator = self.previous();
             let right = self.factor()?;
             expr = Expr::Binary {
@@ -358,7 +360,7 @@ impl<'a> Parser<'a> {
 
     fn factor(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.unary()?;
-        while self.match_type(vec![Slash, Star]) {
+        while self.match_types(vec![Slash, Star]) {
             let operator = self.previous();
             let right = self.unary()?;
             expr = Expr::Binary {
@@ -373,17 +375,16 @@ impl<'a> Parser<'a> {
     }
 
     fn unary(&mut self) -> Result<Expr, ParseError> {
-        let expr;
-        if self.match_type(vec![Bang, Minus]) {
+        let expr = if self.match_types(vec![Bang, Minus]) {
             let operator = self.previous();
             let right = self.unary()?;
-            expr = Expr::Unary {
+            Expr::Unary {
                 operator,
                 right: Box::new(right),
-            };
+            }
         } else {
-            expr = self.call()?;
-        }
+            self.call()?
+        };
 
         // println!("unary expression {expr}");
         Ok(expr)
@@ -392,9 +393,9 @@ impl<'a> Parser<'a> {
     fn call(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.primary()?;
         loop {
-            if self.match_type(vec![LeftParen]) {
+            if self.match_type(LeftParen) {
                 expr = self.finish_call(expr)?;
-            } else if self.match_type(vec![Dot]) {
+            } else if self.match_type(Dot) {
                 let name = self.consume(Identifier, "Expect property name after '.'.")?;
                 let object = Box::new(expr);
                 expr = Expr::Get { object, name };
@@ -414,7 +415,7 @@ impl<'a> Parser<'a> {
                     let line = self.peek().line;
                     self.lox.error(line, "Can't have more than 16 arguments");
                 }
-                if !self.match_type(vec![Comma]) {
+                if !self.match_type(Comma) {
                     break;
                 }
             }
@@ -430,43 +431,43 @@ impl<'a> Parser<'a> {
     }
 
     fn primary(&mut self) -> Result<Expr, ParseError> {
-        if self.match_type(vec![False]) {
+        if self.match_type(False) {
             Ok(Expr::Literal {
                 value: Literal::Boolean(false),
             })
-        } else if self.match_type(vec![True]) {
+        } else if self.match_type(True) {
             Ok(Expr::Literal {
                 value: Literal::Boolean(true),
             })
-        } else if self.match_type(vec![Nil]) {
+        } else if self.match_type(Nil) {
             Ok(Expr::Literal {
                 value: Token::empty_literal(),
             })
-        } else if self.match_type(vec![Number, Chars]) {
+        } else if self.match_types(vec![Number, Chars]) {
             Ok(Expr::Literal {
                 value: self.previous().literal,
             })
-        } else if self.match_type(vec![Super]) {
+        } else if self.match_type(Super) {
             let keyword = self.previous();
             self.consume(Dot, "Expect '.' after 'super'")?;
             let method = self.consume(Identifier, "Expect a method name of the superclass")?;
             Ok(Expr::Super { keyword, method })
-        } else if self.match_type(vec![This]) {
+        } else if self.match_type(This) {
             Ok(Expr::This {
                 keyword: self.previous(),
             })
-        } else if self.match_type(vec![Identifier]) {
+        } else if self.match_type(Identifier) {
             Ok(Expr::Variable {
                 name: self.previous(),
             })
-        } else if self.match_type(vec![LeftParen]) {
+        } else if self.match_type(LeftParen) {
             let expr = self.expression()?;
             self.consume(RightParen, "Expect ')' after expression.")?;
             Ok(Expr::Grouping {
                 expression: Box::new(expr),
             })
         } else {
-            Err(self.error(self.peek(), "Expected expression".to_owned()))
+            Err(self.error(self.peek(), "Expected expression"))
         }
     }
 
@@ -475,28 +476,36 @@ impl<'a> Parser<'a> {
             // self.advance();
             Ok(self.advance())
         } else {
-            Err(self.error(self.peek(), msg.to_owned()))
+            Err(self.error(self.peek(), msg))
         }
     }
 
-    fn error(&mut self, tok: Token, msg: String) -> ParseError {
-        self.lox.token_error(&tok, &msg);
+    fn error(&mut self, tok: Token, msg: &str) -> ParseError {
+        self.lox.token_error(&tok, msg);
         /*
          *  In Lox it is returned a parse error here,
          *  which is a static class that extends RuntimeException
          */
-        ParseError(tok, msg)
+        ParseError(tok, msg.to_owned())
     }
 
-    fn match_type(&mut self, tokens: Vec<TokenType>) -> bool {
+    fn match_types(&mut self, tokens: Vec<TokenType>) -> bool {
         for token_type in tokens {
-            if self.check(token_type) {
-                self.advance();
+            if self.match_type(token_type) {
                 return true;
             }
         }
 
         false
+    }
+
+    fn match_type(&mut self, token_type: TokenType) -> bool {
+        if self.check(token_type) {
+            self.advance();
+            true
+        } else {
+            false
+        }
     }
 
     fn check(&self, token_type: TokenType) -> bool {
@@ -522,7 +531,6 @@ impl<'a> Parser<'a> {
             .get(self.current)
             .expect("token not found in peek")
             .clone()
-        // Token::new(tok.t_type, &tok.lexeme, tok.literal, tok.line)
     }
 
     fn previous(&self) -> Token {

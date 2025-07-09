@@ -104,6 +104,8 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
     }
 
     fn visit_block(&mut self, statements: &[Stmt]) {
+        println!("Block begin");
+        // panic!("DEBUG");
         self.begin_scope();
         for stmt in statements.iter() {
             self.visit_statement(stmt);
@@ -168,7 +170,7 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
             .rev()
             .position(|s| s.contains_key(&name.lexeme));
 
-        // let tok_name = &name.lexeme;
+        let tok_name = &name.lexeme;
         // println!("Position {pos:?} of {tok_name}");
         // println!("Token value {}: line:{}", &name.literal, &name.line);
         // println!("Scopes {:?}", self.scopes);
@@ -176,6 +178,9 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
         if let Some(i) = pos {
             /* Index is different from book, because here global is environment 0 */
             let index = self.scopes.len() - i;
+            println!("Index {index} of {tok_name}");
+            println!("Token value {}: line:{}", &name.literal, &name.line);
+            println!("Scopes {:?}", self.scopes);
             self.interpreter.resolve(expr, index);
         }
     }
@@ -194,13 +199,17 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
     fn resolve_function(&mut self, declaration: &FunctionDeclaration, func_type: FunctionType) {
         let enclosing_func = self.current_function;
         self.current_function = func_type;
-        // self.begin_scope();
+        println!("Function begin");
+        self.begin_scope();
         for param in declaration.params.iter() {
             self.declare(param);
             self.define(param);
         }
-        self.visit_block(&declaration.body);
-        // self.end_scope();
+        for stmt in &declaration.body {
+            self.visit_statement(stmt);
+        }
+        // self.visit_block(&declaration.body);
+        self.end_scope();
         self.current_function = enclosing_func;
     }
 
@@ -295,6 +304,7 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
 
             self.visit_expression(sup_class);
 
+            println!("Super begin");
             self.begin_scope();
             self.scopes
                 .last_mut()
@@ -302,6 +312,7 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
                 .insert("super".to_owned(), true);
         }
 
+        println!("Class begin");
         self.begin_scope();
         self.scopes
             .last_mut()

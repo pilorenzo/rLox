@@ -16,27 +16,34 @@ use crate::{
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoxFunction {
     declaration: FunctionDeclaration,
-    closure: Rc<RefCell<Environment>>,
+    closures: Vec<Rc<RefCell<Environment>>>,
     is_initializer: bool,
 }
 impl LoxFunction {
     pub fn new(
         declaration: FunctionDeclaration,
-        closure: Rc<RefCell<Environment>>,
+        closures: Vec<Rc<RefCell<Environment>>>,
         is_initializer: bool,
     ) -> Self {
         Self {
             declaration,
-            closure,
+            closures,
             is_initializer,
         }
     }
 
     pub fn is_closure_env_in_graph(&self, interpreter: &mut Interpreter) -> bool {
         let mut result = false;
-        let outer = interpreter.graph.envs.last();
-        if let Some(EnvironmentNode::Closure { env }) = outer {
-            result = ptr::eq(&*env.borrow(), &*self.closure.borrow());
+        // let outer = interpreter.graph.envs.last();
+        for environment in interpreter.graph.envs.iter() {
+            if let EnvironmentNode::Closure { env } = environment {
+                let closure = &self.closures[0];
+                // let temp = &*closure.borrow()
+                if ptr::eq(&*env.borrow(), &*closure.borrow()) {
+                    result = true;
+                    break;
+                }
+            }
         }
         result
     }
@@ -45,16 +52,23 @@ impl LoxFunction {
         let mut environment = Environment::new();
         environment.define("this".to_owned(), Literal::Class(instance));
         let closure = Rc::new(RefCell::new(environment));
-        /* is this necessary? */
+
         if !self.is_closure_env_in_graph(interpreter) {
+            println!("Push closure when size == {}", interpreter.graph.envs.len());
             interpreter.graph.envs.push(EnvironmentNode::Closure {
-                env: Rc::clone(&self.closure),
+                env: Rc::clone(&self.closures[0]),
             });
         }
-        /**/
+
+        println!("Binding");
+        println!("Push closure when size == {}", interpreter.graph.envs.len());
+        interpreter.graph.envs.push(EnvironmentNode::Closure {
+            env: Rc::clone(&closure),
+        });
+
         Self {
             declaration: self.declaration.clone(),
-            closure,
+            closures: vec![Rc::clone(&self.closures[0]), closure],
             is_initializer: self.is_initializer,
         }
     }
@@ -66,13 +80,16 @@ impl LoxFunction {
     ) -> Result<Literal, RuntimeError> {
         let is_closure_in_graph = self.is_closure_env_in_graph(interpreter);
         if !is_closure_in_graph {
+            println!("Pushing closures[0] in call");
+            println!("Closure env {}", &self.closures[0].borrow());
             interpreter.graph.envs.push(EnvironmentNode::Closure {
-                env: Rc::clone(&self.closure),
+                env: Rc::clone(&self.closures[0]),
             });
         }
         interpreter.graph.push(Environment::new());
         for (param, arg) in self.declaration.params.iter().zip(arguments.iter()) {
-            interpreter.graph.define(param.lexeme.clone(), arg.clone())
+            println!("local variable: {}", param.lexeme);
+            interpreter.graph.define(&param.lexeme, arg.clone())
         }
         // println!("\n\n###########################");
         // print!("Interpreter \n{interpreter}");
@@ -86,7 +103,7 @@ impl LoxFunction {
         let res = match block_res {
             Err(RuntimeError::Return { value }) => {
                 if self.is_initializer {
-                    Ok(self.closure.borrow().get_literal("this"))
+                    Ok(self.closures[0].borrow().get_literal("this"))
                 } else {
                     Ok(value)
                 }
@@ -94,15 +111,17 @@ impl LoxFunction {
             Err(e) => Err(e),
             Ok(()) => {
                 if self.is_initializer {
-                    Ok(self.closure.borrow().get_literal("this"))
+                    Ok(self.closures[0].borrow().get_literal("this"))
                 } else {
                     Ok(Literal::Null)
                 }
             }
         };
-        interpreter.graph.envs.pop();
+        println!("Mandatory pop");
+        interpreter.graph.pop();
         if !is_closure_in_graph {
-            interpreter.graph.envs.pop();
+            println!("Optional pop");
+            interpreter.graph.pop();
         }
         res
     }
@@ -215,7 +234,7 @@ impl Display for LoxCallable {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct LoxInstance {
     class: LoxClass,
     fields: HashMap<String, Literal>,
@@ -247,21 +266,9 @@ impl LoxInstance {
                 Some(function) => {
                     // println!("Adding function bind");
                     let function = function.bind(interpreter, Rc::clone(&instance));
-                    // for closure in function.closures.iter() {
-                    //     interpreter.graph.envs.push(EnvironmentNode::Closure {
-                    //         env: Rc::clone(closure),
-                    //     });
-                    // }
-                    Ok(Literal::Callable(Box::new(LoxCallable::Function {
-                        function,
-                    })))
+                    Ok(Literal::new_function(function))
                 }
 
-                /*
-                 * Literal::Callable(Box::new(LoxCallable::Function {
-                 *   function: m.clone(),
-                 * }))
-                 */
                 _ => Err(RuntimeError::PropertyError {
                     line: name.line,
                     msg: format!("undefined property '{}'.", name.lexeme),

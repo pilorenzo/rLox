@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::rc::Rc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::environment::EnvironmentGraph;
 use crate::lox_callable::{LoxClass, LoxFunction, LoxInstance};
@@ -14,7 +13,6 @@ use crate::{
 #[derive(Debug)]
 pub enum RuntimeError {
     InvalidOperationError { line: i32, msg: String },
-    // IdentifierError { line: i32, msg: String },
     UndefinedVariable { line: i32, msg: String },
     PropertyError { line: i32, msg: String },
     Return { value: Literal },
@@ -41,8 +39,7 @@ impl Display for Interpreter {
 
 impl Interpreter {
     pub fn new() -> Self {
-        let mut global = Environment::new();
-        define_globals(&mut global);
+        let global = Environment::global();
         Self {
             graph: EnvironmentGraph::new(global),
             locals: Default::default(),
@@ -64,38 +61,35 @@ impl Interpreter {
                 } else {
                     self.visit_expression(initializer)?
                 };
-                self.graph.define(name.lexeme.clone(), val);
+                self.graph.define(&name.lexeme, val);
             }
             Stmt::Block { statements } => {
                 self.graph.push(Environment::new());
                 self.execute_block(statements)?;
-                self.graph.envs.pop();
+                self.graph.pop();
             }
             Stmt::If {
                 condition,
                 then_stmt,
                 else_stmt,
             } => {
-                if is_truthy(&self.visit_expression(condition)?) {
+                if self.visit_expression(condition)?.is_truthy() {
                     self.visit_statement(then_stmt)?
                 } else if let Some(branch) = else_stmt {
                     self.visit_statement(branch)?
                 }
             }
             Stmt::While { condition, body } => {
-                while is_truthy(&self.visit_expression(condition)?) {
+                while self.visit_expression(condition)?.is_truthy() {
                     self.visit_statement(body)?
                 }
             }
             Stmt::Fun { declaration } => {
                 let dec = (*declaration).clone();
                 let closure = self.graph.change_last_to_closure();
-                let function = LoxFunction::new(dec, closure, false);
-                let function = LoxCallable::Function { function };
-                self.graph.define(
-                    declaration.name.lexeme.clone(),
-                    Literal::Callable(Box::new(function)),
-                )
+                let function = LoxFunction::new(dec, vec![closure], false);
+                let name = &declaration.name.lexeme;
+                self.graph.define(name, Literal::new_function(function));
             }
             Stmt::Return { keyword: _, value } => {
                 let value = self.visit_expression(value)?;
@@ -106,38 +100,28 @@ impl Interpreter {
                 methods,
                 superclass,
             } => {
-                // let mut sup_class = None;
                 let mut super_lox_class = None;
                 if let Some(sc) = superclass {
-                    let sup_class = Some(self.visit_expression(sc)?);
-                    let Expr::Variable { name } = &(**sc) else {
-                        panic!("superclass is not a variable");
-                    };
-                    let throw = || {
-                        Err(RuntimeError::InvalidOperationError {
+                    super_lox_class = self.visit_expression(sc)?.get_class();
+                    if super_lox_class.is_none() {
+                        return Err(RuntimeError::InvalidOperationError {
                             line: name.line,
-                            msg: format!("Superclass of {name} must be a class"),
-                        })
-                    };
-                    match sup_class {
-                        Some(Literal::Callable(c)) => match *c {
-                            LoxCallable::Class { class: cl } => {
-                                super_lox_class = Some(Box::new(cl))
-                            }
-                            _ => return throw(),
-                        },
-                        _ => return throw(),
+                            msg: format!("Superclass of {} must be a class", name.lexeme),
+                        });
                     }
                 }
-                self.graph.define(name.lexeme.clone(), Literal::Null);
+                self.graph.define(&name.lexeme, Literal::Null);
 
-                if let Some(ref class) = super_lox_class {
+                // println!("Class definition");
+                // println!("Interpreter \n{}", self);
+                let size = self.graph.envs.len();
+                println!("Size: {size}");
+                if let Some(ref sup_class) = super_lox_class {
                     self.graph.push(Environment::new());
-                    let class = Box::new(LoxCallable::Class {
-                        class: *class.clone(),
-                    });
-                    self.graph
-                        .define("super".to_owned(), Literal::Callable(class));
+                    println!("pushing super env");
+                    let sp = Literal::new_class(sup_class.clone());
+                    self.graph.define("super", sp);
+                    // print!("Interpreter \n{}", self);
                 }
 
                 let mut runtime_methods: HashMap<_, _> = Default::default();
@@ -146,21 +130,26 @@ impl Interpreter {
                     let name = method.name.lexeme.clone();
                     let func = LoxFunction::new(
                         method.clone(),
-                        Rc::clone(&closure),
+                        vec![Rc::clone(&closure)],
                         method.name.lexeme == "init",
                     );
                     runtime_methods.insert(name, func);
                 }
 
-                let class = LoxCallable::Class {
-                    class: LoxClass::new(name.lexeme.clone(), super_lox_class, runtime_methods),
-                };
-                let class = Box::new(class);
+                let class = LoxClass::new(
+                    name.lexeme.clone(),
+                    super_lox_class.map(Box::new),
+                    runtime_methods,
+                );
 
                 if superclass.is_some() {
+                    // while self.graph.envs.len() > size {
+                    println!("popping env");
                     self.graph.pop();
+                    // }
+                    // print!("Interpreter \n{}", self);
                 }
-                self.graph.assign(name.clone(), Literal::Callable(class))?;
+                self.graph.assign(name, Literal::new_class(class))?;
             }
         }
         Ok(())
@@ -170,8 +159,6 @@ impl Interpreter {
         let literal = match expression {
             Expr::Assignment { name, value } => {
                 let value = self.visit_expression(value)?;
-                // self.graph.assign(name.clone(), value.clone())?;
-                // value
                 match self.locals.get(expression) {
                     Some(distance) => self.graph.assign_at(distance, name, &value)?,
                     None => self.graph.envs[0].assign_literal(name, &value).unwrap(),
@@ -179,11 +166,13 @@ impl Interpreter {
                 value
             }
             Expr::Variable { name } => {
-                // print!("Interpreter \n{}", self);
-                // println!("---------------------------");
-                // println!("Expression {expression}");
+                print!("Interpreter \n{}", self);
+                println!("---------------------------");
+                println!("Expression {expression}");
+
+                println!("\n\nLine {}", &name.line);
                 match self.locals.get(expression) {
-                    Some(distance) => self.graph.get_at(distance, name)?,
+                    Some(distance) => self.graph.get_at(*distance, name)?,
                     None => self.graph.envs[0].get_literal(&name.lexeme),
                 }
             }
@@ -192,8 +181,8 @@ impl Interpreter {
             Expr::Unary { operator, right } => {
                 let right = self.visit_expression(right)?;
                 match operator.t_type {
-                    TokenType::Bang => Literal::Boolean(!is_truthy(&right)),
-                    TokenType::Minus => Literal::Numeric(-to_num(operator.line, right)?),
+                    TokenType::Bang => Literal::Boolean(!right.is_truthy()),
+                    TokenType::Minus => Literal::Numeric(-right.to_num(operator.line)?),
                     _ => Literal::Null,
                 }
             }
@@ -205,19 +194,19 @@ impl Interpreter {
                 let (right, left) = (self.visit_expression(right)?, self.visit_expression(left)?);
                 let l = operator.line;
                 match operator.t_type {
-                    TokenType::Greater => Literal::Boolean(to_num(l, left)? > to_num(l, right)?),
+                    TokenType::Greater => Literal::Boolean(left.to_num(l)? > right.to_num(l)?),
                     TokenType::GreaterEqual => {
-                        Literal::Boolean(to_num(l, left)? >= to_num(l, right)?)
+                        Literal::Boolean(left.to_num(l)? >= right.to_num(l)?)
                     }
-                    TokenType::Less => Literal::Boolean(to_num(l, left)? < to_num(l, right)?),
-                    TokenType::LessEqual => Literal::Boolean(to_num(l, left)? <= to_num(l, right)?),
+                    TokenType::Less => Literal::Boolean(left.to_num(l)? < right.to_num(l)?),
+                    TokenType::LessEqual => Literal::Boolean(left.to_num(l)? <= right.to_num(l)?),
 
                     TokenType::EqualEqual => Literal::Boolean(left == right),
                     TokenType::BangEqual => Literal::Boolean(left != right),
 
-                    TokenType::Minus => Literal::Numeric(to_num(l, left)? - to_num(l, right)?),
-                    TokenType::Slash => Literal::Numeric(to_num(l, left)? / to_num(l, right)?),
-                    TokenType::Star => Literal::Numeric(to_num(l, left)? * to_num(l, right)?),
+                    TokenType::Minus => Literal::Numeric(left.to_num(l)? - right.to_num(l)?),
+                    TokenType::Slash => Literal::Numeric(left.to_num(l)? / right.to_num(l)?),
+                    TokenType::Star => Literal::Numeric(left.to_num(l)? * right.to_num(l)?),
                     TokenType::Plus => match (&left, &right) {
                         (Literal::Numeric(l), Literal::Numeric(r)) => Literal::Numeric(l + r),
                         (Literal::Letters(l), Literal::Letters(r)) => {
@@ -242,12 +231,12 @@ impl Interpreter {
                 let mut result = None;
                 match operator.t_type {
                     TokenType::Or => {
-                        if is_truthy(&left) {
+                        if left.is_truthy() {
                             result = Some(left);
                         }
                     }
                     _ => {
-                        if !is_truthy(&left) {
+                        if !left.is_truthy() {
                             result = Some(left);
                         }
                     }
@@ -289,7 +278,7 @@ impl Interpreter {
                 // println!("Get Expr visited");
                 let object = self.visit_expression(object)?;
                 if let Literal::Class(instance) = object {
-                    LoxInstance::get(self, instance, name)? // instance.get(name)?
+                    LoxInstance::get(self, instance, name)?
                 } else {
                     return Err(RuntimeError::PropertyError {
                         line: name.line,
@@ -316,7 +305,7 @@ impl Interpreter {
                 }
             }
             Expr::This { keyword } => match self.locals.get(expression) {
-                Some(distance) => self.graph.get_at(distance, keyword)?,
+                Some(distance) => self.graph.get_at(*distance, keyword)?,
                 None => self.graph.envs[0].get_literal(&keyword.lexeme),
             },
             Expr::Super { keyword, method } => {
@@ -325,17 +314,16 @@ impl Interpreter {
                     .get(expression)
                     .expect("super expression not found in interpreter locals");
 
-                let superclass_literal = self.graph.get_at(distance, keyword)?;
+                let superclass_literal = self.graph.get_at(*distance, keyword)?;
                 let mut superclass = None;
                 if let Literal::Callable(boxed_class) = superclass_literal {
                     if let LoxCallable::Class { class } = *boxed_class {
                         superclass = Some(class);
                     }
                 }
-                let false_token =
-                    Token::new(TokenType::Identifier, "this", Literal::Null, keyword.line);
+                let token = Token::new(TokenType::Identifier, "this", Literal::Null, keyword.line);
                 let distance = &(distance + 1usize);
-                let instance = self.graph.get_at(distance, &false_token)?;
+                let instance = self.graph.get_at(*distance, &token)?;
                 let Literal::Class(instance) = instance else {
                     panic!("'this' not found at distance {distance}");
                 };
@@ -353,7 +341,7 @@ impl Interpreter {
                     });
                 };
                 let function = function.bind(self, instance);
-                Literal::Callable(Box::new(LoxCallable::Function { function }))
+                Literal::new_function(function)
             }
         };
         Ok(literal)
@@ -369,39 +357,4 @@ impl Interpreter {
     pub fn resolve(&mut self, expr: &Expr, i: usize) {
         self.locals.insert(expr.clone(), i);
     }
-}
-
-fn is_truthy(value: &Literal) -> bool {
-    match value {
-        Literal::Null => false,
-        Literal::Boolean(b) => *b,
-        _ => true,
-    }
-}
-
-fn to_num(line: i32, lit: Literal) -> Result<f64, RuntimeError> {
-    match lit {
-        Literal::Numeric(n) => Ok(n),
-        _ => Err(RuntimeError::InvalidOperationError {
-            line,
-            msg: format!("Can't cast {lit} to numeric"),
-        }),
-    }
-}
-
-fn define_globals(env: &mut Environment) {
-    env.define(
-        "clock".to_owned(),
-        Literal::Callable(Box::new(LoxCallable::Anonymous {
-            arity: 0,
-            func: |_| {
-                Literal::Numeric(
-                    SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .expect("Time went backwards")
-                        .as_secs_f64(),
-                )
-            },
-        })),
-    )
 }

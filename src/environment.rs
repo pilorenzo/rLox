@@ -1,5 +1,11 @@
-use crate::{interpreter::RuntimeError, token_type::Token, Literal};
-use std::{cell::RefCell, collections::HashMap, fmt::Display, rc::Rc};
+use crate::{interpreter::RuntimeError, lox_callable::LoxCallable, token_type::Token, Literal};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    fmt::Display,
+    rc::Rc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Environment {
@@ -11,6 +17,25 @@ impl Environment {
         Environment {
             dict: HashMap::<String, Literal>::new(),
         }
+    }
+
+    pub fn global() -> Self {
+        let mut env = Environment::new();
+        env.define(
+            "clock".to_owned(),
+            Literal::Callable(Box::new(LoxCallable::Anonymous {
+                arity: 0,
+                func: |_| {
+                    Literal::Numeric(
+                        SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .expect("Time went backwards")
+                            .as_secs_f64(),
+                    )
+                },
+            })),
+        );
+        env
     }
 
     pub fn define(&mut self, name: String, value: Literal) {
@@ -85,6 +110,17 @@ pub struct EnvironmentGraph {
     pub envs: Vec<EnvironmentNode>,
 }
 
+impl Display for EnvironmentGraph {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut result = String::default();
+        for (i, e) in self.envs.iter().enumerate() {
+            result += &format!("Environment {i}:\n{e}");
+        }
+        result += "-----------------\n";
+        write!(f, "{result}")
+    }
+}
+
 impl EnvironmentGraph {
     pub fn new(global: Environment) -> Self {
         Self {
@@ -92,7 +128,7 @@ impl EnvironmentGraph {
         }
     }
 
-    pub fn assign(&mut self, token: Token, value: Literal) -> Result<(), RuntimeError> {
+    pub fn assign(&mut self, token: &Token, value: Literal) -> Result<(), RuntimeError> {
         let name = &token.lexeme;
         for environment in self.envs.iter_mut().rev() {
             match environment {
@@ -118,26 +154,30 @@ impl EnvironmentGraph {
     }
 
     pub fn push(&mut self, env: Environment) {
-        self.envs.push(EnvironmentNode::Standard { env })
+        self.envs.push(EnvironmentNode::Standard { env });
+        println!("EnvironmentGraph after push:\n{}", self);
     }
 
     pub fn push_closure(&mut self, env: Environment) {
         let env = Rc::new(RefCell::new(env));
-        self.envs.push(EnvironmentNode::Closure { env })
+        self.envs.push(EnvironmentNode::Closure { env });
+        println!("EnvironmentGraph after closure push:\n{}", self);
     }
 
     pub fn pop(&mut self) -> Option<EnvironmentNode> {
-        self.envs.pop()
+        let opt = self.envs.pop();
+        println!("EnvironmentGraph after pop:\n{}", self);
+        opt
     }
 
-    pub fn define(&mut self, name: String, value: Literal) {
+    pub fn define(&mut self, name: &str, value: Literal) {
         match self
             .envs
             .last_mut()
             .expect("No environment found in the interpreter")
         {
-            EnvironmentNode::Standard { env } => env.define(name, value),
-            EnvironmentNode::Closure { env } => env.borrow_mut().define(name, value),
+            EnvironmentNode::Standard { env } => env.define(name.to_owned(), value),
+            EnvironmentNode::Closure { env } => env.borrow_mut().define(name.to_owned(), value),
         }
     }
 
@@ -155,8 +195,9 @@ impl EnvironmentGraph {
         }
     }
 
-    pub fn get_at(&mut self, distance: &usize, name: &Token) -> Result<Literal, RuntimeError> {
-        match self.envs.get(*distance) {
+    pub fn get_at(&mut self, distance: usize, name: &Token) -> Result<Literal, RuntimeError> {
+        println!("Distance: {distance}");
+        match self.envs.get(distance) {
             Some(env) => Ok(env.get_literal(&name.lexeme)),
             None => {
                 // println!("\n\n###########################");
@@ -168,7 +209,7 @@ impl EnvironmentGraph {
                 // println!("-------------------------------");
                 // println!("distance {distance}, envs {}", self.envs.len());
                 // println!("###########################\n\n");
-                // panic!("Can't get variable {name} in selected scope {distance}");
+                panic!("Can't get variable {name} in selected scope {distance}");
                 Err(RuntimeError::UndefinedVariable {
                     line: name.line,
                     msg: format!("Can't get variable {name} in selected scope {distance}"),
