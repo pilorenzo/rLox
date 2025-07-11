@@ -48,6 +48,12 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
         }
     }
 
+    pub fn resolve(&mut self, statements: &[Stmt]) {
+        for stmt in statements {
+            self.visit_statement(stmt)
+        }
+    }
+
     pub fn visit_statement(&mut self, stmt: &Stmt) {
         match stmt {
             Stmt::Block { statements } => self.visit_block(statements),
@@ -107,9 +113,10 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
         println!("Block begin");
         // panic!("DEBUG");
         self.begin_scope();
-        for stmt in statements.iter() {
-            self.visit_statement(stmt);
-        }
+        self.resolve(statements);
+        // for stmt in statements.iter() {
+        //     self.visit_statement(stmt);
+        // }
         self.end_scope();
     }
 
@@ -205,9 +212,10 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
             self.declare(param);
             self.define(param);
         }
-        for stmt in &declaration.body {
-            self.visit_statement(stmt);
-        }
+        self.resolve(&declaration.body);
+        // for stmt in &declaration.body {
+        //     self.visit_statement(stmt);
+        // }
         // self.visit_block(&declaration.body);
         self.end_scope();
         self.current_function = enclosing_func;

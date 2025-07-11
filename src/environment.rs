@@ -48,6 +48,10 @@ impl Environment {
             .unwrap_or_else(|| panic!("No entry found for key '{name}'"))
             .clone()
     }
+
+    pub fn find_literal(&self, name: &str) -> Option<Literal> {
+        self.dict.get(name).cloned()
+    }
 }
 
 impl Display for Environment {
@@ -93,6 +97,13 @@ impl EnvironmentNode {
                     None
                 }
             }
+        }
+    }
+
+    pub fn find_literal(&self, name: &str) -> Option<Literal> {
+        match self {
+            EnvironmentNode::Standard { env } => env.find_literal(name),
+            EnvironmentNode::Closure { env } => env.borrow().find_literal(name),
         }
     }
 }
@@ -155,18 +166,18 @@ impl EnvironmentGraph {
 
     pub fn push(&mut self, env: Environment) {
         self.envs.push(EnvironmentNode::Standard { env });
-        println!("EnvironmentGraph after push:\n{}", self);
+        // println!("EnvironmentGraph after push:\n{}", self);
     }
 
     pub fn push_closure(&mut self, env: Environment) {
         let env = Rc::new(RefCell::new(env));
         self.envs.push(EnvironmentNode::Closure { env });
-        println!("EnvironmentGraph after closure push:\n{}", self);
+        // println!("EnvironmentGraph after closure push:\n{}", self);
     }
 
     pub fn pop(&mut self) -> Option<EnvironmentNode> {
         let opt = self.envs.pop();
-        println!("EnvironmentGraph after pop:\n{}", self);
+        // println!("EnvironmentGraph after pop:\n{}", self);
         opt
     }
 

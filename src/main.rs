@@ -90,19 +90,20 @@ impl Lox {
         Lox::resolve_and_interpret(self, &statements);
     }
 
-    fn resolve_and_interpret(lox: &mut Lox, statements: &Vec<Stmt>) {
+    fn resolve_and_interpret(lox: &mut Lox, statements: &[Stmt]) {
         let mut interpreter = Interpreter::new();
         let mut resolver = Resolver::new(&mut interpreter, lox);
-        for stmt in statements {
-            resolver.visit_statement(stmt);
-        }
+        // for stmt in statements {
+        //     resolver.visit_statement(stmt);
+        // }
+        resolver.resolve(statements);
 
         if lox.had_error {
             return;
         }
 
         println!("Ended resolve\n");
-        println!("Interpreter {interpreter}");
+        // println!("Interpreter {interpreter}");
 
         for stmt in statements {
             match interpreter.visit_statement(stmt) {

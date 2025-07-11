@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::rc::Rc;
 
-use crate::environment::EnvironmentGraph;
+use crate::environment::{EnvironmentGraph, EnvironmentNode};
 use crate::lox_callable::{LoxClass, LoxFunction, LoxInstance};
 use crate::token_type::Token;
 use crate::{
@@ -52,7 +52,7 @@ impl Interpreter {
                 self.visit_expression(expression)?;
             }
             Stmt::Print { expression } => match self.visit_expression(expression) {
-                Ok(value) => println!("{value}"),
+                Ok(value) => println!(">>> {value}"),
                 Err(e) => return Err(e),
             },
             Stmt::Var { name, initializer } => {
@@ -85,9 +85,26 @@ impl Interpreter {
                 }
             }
             Stmt::Fun { declaration } => {
+                // println!("Declaration of {}", declaration.name.lexeme);
+                // println!("Interpreter {}", self);
                 let dec = (*declaration).clone();
                 let closure = self.graph.change_last_to_closure();
-                let function = LoxFunction::new(dec, vec![closure], false);
+                let this_env = self
+                    .graph
+                    .envs
+                    .iter()
+                    .rev()
+                    .find(|e| e.find_literal("this").is_some());
+                // .first();
+                // let this_env = self.locals.get(&this_expr).map(|d| &self.graph.envs[*d]);
+                // println!("Environment of this {:?}", this_env);
+                let closure_vec = if let Some(EnvironmentNode::Closure { env }) = this_env {
+                    vec![Rc::clone(env), closure]
+                } else {
+                    vec![closure]
+                };
+
+                let function = LoxFunction::new(dec, closure_vec, false);
                 let name = &declaration.name.lexeme;
                 self.graph.define(name, Literal::new_function(function));
             }
@@ -166,11 +183,11 @@ impl Interpreter {
                 value
             }
             Expr::Variable { name } => {
-                print!("Interpreter \n{}", self);
-                println!("---------------------------");
-                println!("Expression {expression}");
-
-                println!("\n\nLine {}", &name.line);
+                // print!("Interpreter \n{}", self);
+                // println!("---------------------------");
+                // println!("Expression {expression}");
+                //
+                println!("Line {}", &name.line);
                 match self.locals.get(expression) {
                     Some(distance) => self.graph.get_at(*distance, name)?,
                     None => self.graph.envs[0].get_literal(&name.lexeme),
