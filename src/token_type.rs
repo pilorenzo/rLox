@@ -6,8 +6,8 @@ use std::{
 };
 
 use crate::{
-    interpreter::RuntimeError,
     lox_callable::{LoxCallable, LoxClass, LoxFunction, LoxInstance},
+    runtime_error::RuntimeError,
 };
 
 #[derive(Debug, PartialEq, Clone, Copy, Hash)]
@@ -145,7 +145,7 @@ impl Literal {
     pub fn to_num(&self, line: i32) -> Result<f64, RuntimeError> {
         match *self {
             Literal::Numeric(n) => Ok(n),
-            _ => Err(RuntimeError::InvalidOperationError {
+            _ => Err(RuntimeError::Error {
                 line,
                 msg: format!("Can't cast {} to numeric", self),
             }),

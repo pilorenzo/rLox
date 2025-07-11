@@ -4,19 +4,12 @@ use std::rc::Rc;
 
 use crate::environment::{EnvironmentGraph, EnvironmentNode};
 use crate::lox_callable::{LoxClass, LoxFunction, LoxInstance};
+use crate::runtime_error::RuntimeError;
 use crate::token_type::Token;
 use crate::{
     environment::Environment, expression::Expr, lox_callable::LoxCallable, statement::Stmt,
     Literal, TokenType,
 };
-
-#[derive(Debug)]
-pub enum RuntimeError {
-    InvalidOperationError { line: i32, msg: String },
-    UndefinedVariable { line: i32, msg: String },
-    PropertyError { line: i32, msg: String },
-    Return { value: Literal },
-}
 
 pub struct Interpreter {
     pub graph: EnvironmentGraph,
@@ -85,8 +78,6 @@ impl Interpreter {
                 }
             }
             Stmt::Fun { declaration } => {
-                // println!("Declaration of {}", declaration.name.lexeme);
-                // println!("Interpreter {}", self);
                 let dec = (*declaration).clone();
                 let closure = self.graph.change_last_to_closure();
                 let this_env = self
@@ -95,9 +86,6 @@ impl Interpreter {
                     .iter()
                     .rev()
                     .find(|e| e.find_literal("this").is_some());
-                // .first();
-                // let this_env = self.locals.get(&this_expr).map(|d| &self.graph.envs[*d]);
-                // println!("Environment of this {:?}", this_env);
                 let closure_vec = if let Some(EnvironmentNode::Closure { env }) = this_env {
                     vec![Rc::clone(env), closure]
                 } else {
@@ -121,7 +109,7 @@ impl Interpreter {
                 if let Some(sc) = superclass {
                     super_lox_class = self.visit_expression(sc)?.get_class();
                     if super_lox_class.is_none() {
-                        return Err(RuntimeError::InvalidOperationError {
+                        return Err(RuntimeError::Error {
                             line: name.line,
                             msg: format!("Superclass of {} must be a class", name.lexeme),
                         });
@@ -129,16 +117,10 @@ impl Interpreter {
                 }
                 self.graph.define(&name.lexeme, Literal::Null);
 
-                // println!("Class definition");
-                // println!("Interpreter \n{}", self);
-                let size = self.graph.envs.len();
-                println!("Size: {size}");
                 if let Some(ref sup_class) = super_lox_class {
                     self.graph.push(Environment::new());
-                    println!("pushing super env");
                     let sp = Literal::new_class(sup_class.clone());
                     self.graph.define("super", sp);
-                    // print!("Interpreter \n{}", self);
                 }
 
                 let mut runtime_methods: HashMap<_, _> = Default::default();
@@ -160,11 +142,7 @@ impl Interpreter {
                 );
 
                 if superclass.is_some() {
-                    // while self.graph.envs.len() > size {
-                    println!("popping env");
                     self.graph.pop();
-                    // }
-                    // print!("Interpreter \n{}", self);
                 }
                 self.graph.assign(name, Literal::new_class(class))?;
             }
@@ -182,17 +160,10 @@ impl Interpreter {
                 }
                 value
             }
-            Expr::Variable { name } => {
-                // print!("Interpreter \n{}", self);
-                // println!("---------------------------");
-                // println!("Expression {expression}");
-                //
-                println!("Line {}", &name.line);
-                match self.locals.get(expression) {
-                    Some(distance) => self.graph.get_at(*distance, name)?,
-                    None => self.graph.envs[0].get_literal(&name.lexeme),
-                }
-            }
+            Expr::Variable { name } => match self.locals.get(expression) {
+                Some(distance) => self.graph.get_at(*distance, name)?,
+                None => self.graph.envs[0].get_literal(&name.lexeme),
+            },
             Expr::Literal { value } => value.clone(),
             Expr::Grouping { expression } => self.visit_expression(expression)?,
             Expr::Unary { operator, right } => {
@@ -230,7 +201,7 @@ impl Interpreter {
                             Literal::Letters(format!("{l}{r}"))
                         }
                         _ => {
-                            return Err(RuntimeError::InvalidOperationError {
+                            return Err(RuntimeError::Error {
                                 line: l,
                                 msg: format!("Can't add {right} to {left}"),
                             })
@@ -274,13 +245,13 @@ impl Interpreter {
                     arguments.push(self.visit_expression(arg)?);
                 }
                 let Literal::Callable(function) = callee else {
-                    return Err(RuntimeError::InvalidOperationError {
+                    return Err(RuntimeError::Error {
                         line: paren.line,
                         msg: "Can only call function and classes".to_owned(),
                     });
                 };
                 if arguments.len() != function.get_arity() {
-                    return Err(RuntimeError::InvalidOperationError {
+                    return Err(RuntimeError::Error {
                         line: paren.line,
                         msg: format!(
                             "Expected {} arguments, got {}",
@@ -292,12 +263,11 @@ impl Interpreter {
                 function.call(self, arguments)?
             }
             Expr::Get { object, name } => {
-                // println!("Get Expr visited");
                 let object = self.visit_expression(object)?;
                 if let Literal::Class(instance) = object {
-                    LoxInstance::get(self, instance, name)?
+                    LoxInstance::get(instance, name)?
                 } else {
-                    return Err(RuntimeError::PropertyError {
+                    return Err(RuntimeError::Error {
                         line: name.line,
                         msg: "Only instances have properties".to_owned(),
                     });
@@ -308,14 +278,13 @@ impl Interpreter {
                 name,
                 value,
             } => {
-                // println!("Set Expr visited");
                 let object = self.visit_expression(object)?;
                 if let Literal::Class(instance) = object {
                     let value = self.visit_expression(value)?;
                     instance.borrow_mut().set(name, &value);
                     value
                 } else {
-                    return Err(RuntimeError::PropertyError {
+                    return Err(RuntimeError::Error {
                         line: name.line,
                         msg: "Only instances have fields".to_owned(),
                     });
@@ -352,12 +321,12 @@ impl Interpreter {
                 let func = superclass.find_method(&method.lexeme);
 
                 let Some(function) = func else {
-                    return Err(RuntimeError::PropertyError {
+                    return Err(RuntimeError::Error {
                         line: method.line,
                         msg: format!("undefined property '{}'.", method.lexeme),
                     });
                 };
-                let function = function.bind(self, instance);
+                let function = function.bind(instance);
                 Literal::new_function(function)
             }
         };

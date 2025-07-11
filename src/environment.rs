@@ -1,4 +1,4 @@
-use crate::{interpreter::RuntimeError, lox_callable::LoxCallable, token_type::Token, Literal};
+use crate::{lox_callable::LoxCallable, runtime_error::RuntimeError, token_type::Token, Literal};
 use std::{
     cell::RefCell,
     collections::HashMap,
@@ -158,7 +158,7 @@ impl EnvironmentGraph {
             };
         }
 
-        Err(RuntimeError::UndefinedVariable {
+        Err(RuntimeError::Error {
             line: token.line,
             msg: format!("Trying to assign to an undefined variable '{name}'."),
         })
@@ -176,9 +176,10 @@ impl EnvironmentGraph {
     }
 
     pub fn pop(&mut self) -> Option<EnvironmentNode> {
-        let opt = self.envs.pop();
+        self.envs.pop()
+        // let opt = self.envs.pop();
         // println!("EnvironmentGraph after pop:\n{}", self);
-        opt
+        // opt
     }
 
     pub fn define(&mut self, name: &str, value: Literal) {
@@ -207,7 +208,6 @@ impl EnvironmentGraph {
     }
 
     pub fn get_at(&mut self, distance: usize, name: &Token) -> Result<Literal, RuntimeError> {
-        println!("Distance: {distance}");
         match self.envs.get(distance) {
             Some(env) => Ok(env.get_literal(&name.lexeme)),
             None => {
@@ -220,8 +220,8 @@ impl EnvironmentGraph {
                 // println!("-------------------------------");
                 // println!("distance {distance}, envs {}", self.envs.len());
                 // println!("###########################\n\n");
-                panic!("Can't get variable {name} in selected scope {distance}");
-                Err(RuntimeError::UndefinedVariable {
+                // panic!("Can't get variable {name} in selected scope {distance}");
+                Err(RuntimeError::Error {
                     line: name.line,
                     msg: format!("Can't get variable {name} in selected scope {distance}"),
                 })
@@ -236,7 +236,7 @@ impl EnvironmentGraph {
         value: &Literal,
     ) -> Result<(), RuntimeError> {
         let err = |v, t: &Token, d| {
-            Err(RuntimeError::UndefinedVariable {
+            Err(RuntimeError::Error {
                 line: t.line,
                 msg: format!("Can't assign value {v} to variable {t} in selected scope {d}"),
             })

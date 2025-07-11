@@ -4,12 +4,14 @@ mod interpreter;
 mod lox_callable;
 mod parser;
 mod resolver;
+mod runtime_error;
 mod scanner;
 mod statement;
 mod token_type;
-use interpreter::{Interpreter, RuntimeError};
+use interpreter::Interpreter;
 use parser::Parser;
 use resolver::Resolver;
+use runtime_error::RuntimeError;
 use scanner::*;
 use statement::Stmt;
 use std::{
@@ -93,9 +95,6 @@ impl Lox {
     fn resolve_and_interpret(lox: &mut Lox, statements: &[Stmt]) {
         let mut interpreter = Interpreter::new();
         let mut resolver = Resolver::new(&mut interpreter, lox);
-        // for stmt in statements {
-        //     resolver.visit_statement(stmt);
-        // }
         resolver.resolve(statements);
 
         if lox.had_error {
@@ -135,16 +134,15 @@ impl Lox {
     }
 
     pub fn runtime_error(&mut self, error: RuntimeError) {
-        let (msg, line) = match error {
-            RuntimeError::InvalidOperationError { line, msg } => (msg, line),
-            // RuntimeError::IdentifierError { line, msg } => (msg, line),
-            RuntimeError::UndefinedVariable { line, msg } => (msg, line),
-            RuntimeError::PropertyError { line, msg } => (msg, line),
-            RuntimeError::Return { value } => {
-                (format!("not an error, returning value {value}"), -1)
-            }
-        };
-        eprintln!("{} \n[line {}]", msg, line);
+        // let (msg, line) = match error {
+        //     LoxRuntimeError::InvalidOperationError { line, msg } => (msg, line),
+        //     LoxRuntimeError::UndefinedVariable { line, msg } => (msg, line),
+        //     LoxRuntimeError::PropertyError { line, msg } => (msg, line),
+        //     LoxRuntimeError::Return { value } => {
+        //         (format!("not an error, returning value {value}"), -1)
+        //     }
+        // };
+        eprintln!("{error}");
         self.had_runtime_error = true;
     }
 }
