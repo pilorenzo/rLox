@@ -6,10 +6,7 @@ use crate::environment::{EnvironmentGraph, EnvironmentNode};
 use crate::lox_callable::{LoxClass, LoxFunction, LoxInstance};
 use crate::runtime_error::RuntimeError;
 use crate::token_type::Token;
-use crate::{
-    environment::Environment, expression::Expr, lox_callable::LoxCallable, statement::Stmt,
-    Literal, TokenType,
-};
+use crate::{environment::Environment, expression::Expr, statement::Stmt, Literal, TokenType};
 
 pub struct Interpreter {
     pub graph: EnvironmentGraph,
@@ -298,24 +295,14 @@ impl Interpreter {
                 let distance = self
                     .locals
                     .get(expression)
-                    .expect("super expression not found in interpreter locals");
+                    .expect("'super' expression not found in interpreter locals");
 
                 let superclass_literal = self.graph.get_at(*distance, keyword)?;
-                let mut superclass = None;
-                if let Literal::Callable(boxed_class) = superclass_literal {
-                    if let LoxCallable::Class { class } = *boxed_class {
-                        superclass = Some(class);
-                    }
-                }
+                let superclass = superclass_literal.get_class().unwrap();
                 let token = Token::new(TokenType::Identifier, "this", Literal::Null, keyword.line);
-                let distance = &(distance + 1usize);
-                let instance = self.graph.get_at(*distance, &token)?;
+                let instance = self.graph.get_at(distance + 1usize, &token)?;
                 let Literal::Class(instance) = instance else {
                     panic!("'this' not found at distance {distance}");
-                };
-
-                let Some(superclass) = superclass else {
-                    panic!("superclass not found in line {}", keyword.line);
                 };
 
                 let func = superclass.find_method(&method.lexeme);

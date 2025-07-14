@@ -13,18 +13,17 @@ use parser::Parser;
 use resolver::Resolver;
 use runtime_error::RuntimeError;
 use scanner::*;
-use statement::Stmt;
 use std::{
     env,
     fs::read,
-    io::{self, BufRead, Error, Write},
+    io::{self, Error, Write},
     str,
 };
 use token_type::Token;
 use token_type::*;
 
 fn main() -> Result<(), Error> {
-    env::set_var("RUST_BACKTRACE", "1");
+    // env::set_var("RUST_BACKTRACE", "1");
     let args: Vec<String> = env::args().collect();
     let mut lox = Lox::new();
     println!("Hello, world!");
@@ -63,16 +62,24 @@ impl Lox {
     }
 
     fn run_prompt(&mut self) -> Result<(), Error> {
-        for _ in io::stdin().lock().lines() {
+        println!("Write 'quit' to exit prompt.");
+        let mut buffer = String::new();
+        loop {
+            let mut new_line = String::new();
             print!("> ");
             io::stdout().flush()?;
-
-            match io::stdin().lock().lines().next() {
-                Some(Ok(input)) => self.run(&input),
-                Some(Err(e)) => eprintln!("Error reading line: {}", e),
-                None => break,
+            if let Err(e) = io::stdin().read_line(&mut new_line) {
+                eprintln!("Error reading line: {}", e)
+            } else if new_line.trim_end() == "quit" {
+                break;
+            } else {
+                let full_text = buffer.clone() + &new_line;
+                self.run(&full_text);
+                if !self.had_error {
+                    buffer.push_str(&new_line);
+                }
             }
-            self.had_error = false;
+            self.had_error = false
         }
         Ok(())
     }
@@ -88,35 +95,31 @@ impl Lox {
             self.had_error = true;
             return;
         };
+        // println!("Parsed");
 
-        Lox::resolve_and_interpret(self, &statements);
-    }
-
-    fn resolve_and_interpret(lox: &mut Lox, statements: &[Stmt]) {
         let mut interpreter = Interpreter::new();
-        let mut resolver = Resolver::new(&mut interpreter, lox);
-        resolver.resolve(statements);
+        let mut resolver = Resolver::new(&mut interpreter, self);
+        resolver.resolve(&statements);
 
-        if lox.had_error {
+        if self.had_error {
             return;
         }
+        // println!("Resolved");
 
-        println!("Ended resolve\n");
-        // println!("Interpreter {interpreter}");
-
-        for stmt in statements {
+        for stmt in &statements {
             match interpreter.visit_statement(stmt) {
                 Ok(_) => continue,
                 Err(error) => {
-                    lox.runtime_error(error);
+                    self.runtime_error(error);
                     return;
                 }
             }
         }
+        // println!("Interpreted");
     }
 
     fn error(&mut self, line: i32, message: &str) {
-        Self::report(self, line, "", message);
+        self.report(line, "", message);
     }
 
     fn report(&mut self, line: i32, place: &str, message: &str) {
@@ -133,15 +136,7 @@ impl Lox {
         }
     }
 
-    pub fn runtime_error(&mut self, error: RuntimeError) {
-        // let (msg, line) = match error {
-        //     LoxRuntimeError::InvalidOperationError { line, msg } => (msg, line),
-        //     LoxRuntimeError::UndefinedVariable { line, msg } => (msg, line),
-        //     LoxRuntimeError::PropertyError { line, msg } => (msg, line),
-        //     LoxRuntimeError::Return { value } => {
-        //         (format!("not an error, returning value {value}"), -1)
-        //     }
-        // };
+    fn runtime_error(&mut self, error: RuntimeError) {
         eprintln!("{error}");
         self.had_runtime_error = true;
     }
