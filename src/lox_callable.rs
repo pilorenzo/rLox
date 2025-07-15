@@ -32,24 +32,20 @@ impl LoxFunction {
     }
 
     fn is_in_graph(interpreter: &Interpreter, closure: &Rc<RefCell<Environment>>) -> bool {
-        let mut result = false;
         for environment in interpreter.graph.envs.iter() {
             if let EnvironmentNode::Closure { env } = environment {
                 if ptr::eq(&*env.borrow(), &*closure.borrow()) {
-                    result = true;
-                    break;
+                    return true;
                 }
             }
         }
-        result
+        false
     }
 
     pub fn bind(&self, instance: Rc<RefCell<LoxInstance>>) -> Self {
         let mut environment = Environment::new();
         environment.define("this".to_owned(), Literal::Class(instance));
         let closure = Rc::new(RefCell::new(environment));
-
-        // println!("Binding");
 
         let mut closures = vec![];
         if self.closures[0].borrow().find_literal("super").is_some() {
@@ -72,7 +68,7 @@ impl LoxFunction {
         }
     }
 
-    pub fn call(
+    fn call(
         &self,
         interpreter: &mut Interpreter,
         arguments: Vec<Literal>,
@@ -89,22 +85,15 @@ impl LoxFunction {
 
         interpreter.graph.push(Environment::new());
         for (param, arg) in self.declaration.params.iter().zip(arguments.iter()) {
-            // println!("local variable: {}", param.lexeme);
             interpreter.graph.define(&param.lexeme, arg.clone())
         }
-        // println!("\n\n###########################");
-        // print!("Interpreter \n{interpreter}");
-        // println!("---------------------------");
-        // print!("Closure env :\n{}", self.closure.borrow());
-        // println!("###########################\n\n");
-        // println!("Function name {}", &self.declaration.name);
-        // println!("Is initializer? {}", &self.is_initializer);
+
         let block_res = interpreter.execute_block(&self.declaration.body);
-        // println!("Block result {block_res:?}");
         let res = match block_res {
             Err(RuntimeError::Return { value }) => {
                 if self.is_initializer {
-                    Ok(self.closures[0].borrow().get_literal("this"))
+                    let this = Token::new_this(self.declaration.name.line);
+                    self.closures[0].borrow().get_literal(&this)
                 } else {
                     Ok(value)
                 }
@@ -112,16 +101,15 @@ impl LoxFunction {
             Err(e) => Err(e),
             Ok(()) => {
                 if self.is_initializer {
-                    Ok(self.closures[0].borrow().get_literal("this"))
+                    let this = Token::new_this(self.declaration.name.line);
+                    self.closures[0].borrow().get_literal(&this)
                 } else {
                     Ok(Literal::Null)
                 }
             }
         };
-        // println!("Mandatory pop");
         interpreter.graph.pop();
         for _ in 0..closure_count {
-            // println!("Optional pop");
             interpreter.graph.pop();
         }
         res
@@ -171,6 +159,19 @@ impl LoxClass {
         }
     }
 
+    fn call(
+        &self,
+        interpreter: &mut Interpreter,
+        arguments: Vec<Literal>,
+    ) -> Result<Literal, RuntimeError> {
+        let instance = Rc::new(RefCell::new(LoxInstance::new(self.clone())));
+        if let Some(init) = self.find_method("init") {
+            init.bind(Rc::clone(&instance))
+                .call(interpreter, arguments)?;
+        }
+        Ok(Literal::Class(instance))
+    }
+
     pub fn find_method(&self, lexeme: &str) -> Option<&LoxFunction> {
         let class_method = self.methods.get(lexeme);
         match (class_method, &self.superclass) {
@@ -209,15 +210,7 @@ impl LoxCallable {
         match self {
             LoxCallable::Anonymous { arity: _, func } => Ok((func)(arguments)),
             LoxCallable::Function { function } => function.call(interpreter, arguments),
-            LoxCallable::Class { class } => {
-                let instance = Rc::new(RefCell::new(LoxInstance::new(class.clone())));
-                if let Some(initializer) = class.find_method("init") {
-                    initializer
-                        .bind(Rc::clone(&instance))
-                        .call(interpreter, arguments)?;
-                }
-                Ok(Literal::Class(instance))
-            }
+            LoxCallable::Class { class } => class.call(interpreter, arguments),
         }
     }
 }
@@ -261,7 +254,6 @@ impl LoxInstance {
 
             None => match instance.borrow().class.find_method(&name.lexeme) {
                 Some(function) => {
-                    // println!("Adding function bind");
                     let function = function.bind(Rc::clone(&instance));
                     Ok(Literal::new_function(function))
                 }

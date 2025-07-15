@@ -1,10 +1,9 @@
 use crate::{Literal, Lox, Token, TokenType};
-// use ::std::any::Any;
 use std::char;
 
 pub struct Scanner<'a> {
     lox: &'a mut Lox,
-    source: String,
+    source: &'a str,
     tokens: Vec<Token>,
     start: usize,
     current: usize,
@@ -12,7 +11,7 @@ pub struct Scanner<'a> {
 }
 
 impl<'a> Scanner<'a> {
-    pub fn new(lox: &'a mut Lox, source: String) -> Self {
+    pub fn new(lox: &'a mut Lox, source: &'a str) -> Self {
         Self {
             lox,
             source,
@@ -29,12 +28,8 @@ impl<'a> Scanner<'a> {
             self.scan_token();
         }
 
-        self.tokens.push(Token::new(
-            TokenType::Eof,
-            "",
-            Token::empty_literal(),
-            self.line,
-        ));
+        let eof_token = Token::new(TokenType::Eof, "", Literal::Null, self.line);
+        self.tokens.push(eof_token);
 
         &self.tokens
     }
@@ -119,7 +114,7 @@ impl<'a> Scanner<'a> {
         }
     }
     fn add_token(&mut self, t: TokenType) {
-        self.add_token_with_literal(t, Token::empty_literal());
+        self.add_token_with_literal(t, Literal::Null);
     }
 
     fn get_source_substring(&self) -> String {

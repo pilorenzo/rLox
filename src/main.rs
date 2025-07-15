@@ -61,6 +61,13 @@ impl Lox {
         }
     }
 
+    /*
+     *  This prompt runs all the code written in the previous iterations.
+     *  This means that if you print something, the print will be repeated
+     *  in every successive iteration.
+     *  Should rewrite run() to return the state of the lox program
+     *  and interpret only the last line inserted.
+     */
     fn run_prompt(&mut self) -> Result<(), Error> {
         println!("Write 'quit' to exit prompt.");
         let mut buffer = String::new();
@@ -75,18 +82,18 @@ impl Lox {
             } else {
                 let full_text = buffer.clone() + &new_line;
                 self.run(&full_text);
-                if !self.had_error {
+                if !self.had_error && !self.had_runtime_error {
                     buffer.push_str(&new_line);
                 }
             }
-            self.had_error = false
         }
         Ok(())
     }
 
     fn run(&mut self, source: &str) {
-        let text = source.to_owned();
-        let mut scanner = Scanner::new(self, text);
+        self.had_error = false;
+        self.had_runtime_error = false;
+        let mut scanner = Scanner::new(self, source);
         let tokens = scanner.scan_tokens().clone();
         let parse_result = Parser::new(self, tokens).parse();
         let Ok(statements) = parse_result else {

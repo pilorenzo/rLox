@@ -101,8 +101,8 @@ impl Token {
         }
     }
 
-    pub fn empty_literal() -> Literal {
-        Literal::Null
+    pub fn new_this(line: i32) -> Self {
+        Token::new(TokenType::This, "this", Literal::Null, line)
     }
 }
 
@@ -151,16 +151,6 @@ impl Literal {
             }),
         }
     }
-
-    // pub fn get_function(self) -> Option<LoxFunction> {
-    //     match self {
-    //         Literal::Callable(c) => match *c {
-    //             LoxCallable::Function { function } => Some(function),
-    //             _ => None,
-    //         },
-    //         _ => None,
-    //     }
-    // }
 
     pub fn new_function(function: LoxFunction) -> Self {
         Literal::Callable(Box::new(LoxCallable::Function { function }))

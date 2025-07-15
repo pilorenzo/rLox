@@ -5,6 +5,7 @@ use std::rc::Rc;
 use crate::environment::{EnvironmentGraph, EnvironmentNode};
 use crate::lox_callable::{LoxClass, LoxFunction, LoxInstance};
 use crate::runtime_error::RuntimeError;
+use crate::statement::FunctionDeclaration;
 use crate::token_type::Token;
 use crate::{environment::Environment, expression::Expr, statement::Stmt, Literal, TokenType};
 
@@ -38,113 +39,24 @@ impl Interpreter {
 
     pub fn visit_statement(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
         match stmt {
-            Stmt::Expression { expression } => {
-                self.visit_expression(expression)?;
-            }
-            Stmt::Print { expression } => match self.visit_expression(expression) {
-                Ok(value) => println!(">>> {value}"),
-                Err(e) => return Err(e),
-            },
-            Stmt::Var { name, initializer } => {
-                let val = if initializer.is_null() {
-                    Literal::Null
-                } else {
-                    self.visit_expression(initializer)?
-                };
-                self.graph.define(&name.lexeme, val);
-            }
-            Stmt::Block { statements } => {
-                self.graph.push(Environment::new());
-                self.execute_block(statements)?;
-                self.graph.pop();
-            }
+            Stmt::Expression { expression } => self.visit_stmt_expression(expression),
+            Stmt::Print { expression } => self.visit_stmt_print(expression),
+            Stmt::Var { name, initializer } => self.visit_stmt_var(name, initializer),
+            Stmt::Block { statements } => self.visit_stmt_block(statements),
             Stmt::If {
                 condition,
                 then_stmt,
                 else_stmt,
-            } => {
-                if self.visit_expression(condition)?.is_truthy() {
-                    self.visit_statement(then_stmt)?
-                } else if let Some(branch) = else_stmt {
-                    self.visit_statement(branch)?
-                }
-            }
-            Stmt::While { condition, body } => {
-                while self.visit_expression(condition)?.is_truthy() {
-                    self.visit_statement(body)?
-                }
-            }
-            Stmt::Fun { declaration } => {
-                let dec = (*declaration).clone();
-                let closure = self.graph.change_last_to_closure();
-                let this_env = self
-                    .graph
-                    .envs
-                    .iter()
-                    .rev()
-                    .find(|e| e.find_literal("this").is_some());
-                let closure_vec = if let Some(EnvironmentNode::Closure { env }) = this_env {
-                    vec![Rc::clone(env), closure]
-                } else {
-                    vec![closure]
-                };
-
-                let function = LoxFunction::new(dec, closure_vec, false);
-                let name = &declaration.name.lexeme;
-                self.graph.define(name, Literal::new_function(function));
-            }
-            Stmt::Return { keyword: _, value } => {
-                let value = self.visit_expression(value)?;
-                return Err(RuntimeError::Return { value });
-            }
+            } => self.visit_stmt_if(condition, then_stmt, else_stmt),
+            Stmt::While { condition, body } => self.visit_stmt_while(condition, body),
+            Stmt::Fun { declaration } => self.visit_stmt_fun(declaration),
+            Stmt::Return { keyword: _, value } => self.visit_stmt_return(value),
             Stmt::Class {
                 name,
                 methods,
                 superclass,
-            } => {
-                let mut super_lox_class = None;
-                if let Some(sc) = superclass {
-                    super_lox_class = self.visit_expression(sc)?.get_class();
-                    if super_lox_class.is_none() {
-                        return Err(RuntimeError::Error {
-                            line: name.line,
-                            msg: format!("Superclass of {} must be a class", name.lexeme),
-                        });
-                    }
-                }
-                self.graph.define(&name.lexeme, Literal::Null);
-
-                if let Some(ref sup_class) = super_lox_class {
-                    self.graph.push(Environment::new());
-                    let sp = Literal::new_class(sup_class.clone());
-                    self.graph.define("super", sp);
-                }
-
-                let mut runtime_methods: HashMap<_, _> = Default::default();
-                let closure = self.graph.change_last_to_closure();
-                for method in methods {
-                    let name = method.name.lexeme.clone();
-                    let func = LoxFunction::new(
-                        method.clone(),
-                        vec![Rc::clone(&closure)],
-                        method.name.lexeme == "init",
-                    );
-                    runtime_methods.insert(name, func);
-                }
-
-                let class = LoxClass::new(
-                    name.lexeme.clone(),
-                    super_lox_class.map(Box::new),
-                    runtime_methods,
-                );
-
-                if superclass.is_some() {
-                    self.graph.pop();
-                }
-                self.graph.assign(name, Literal::new_class(class))?;
-            }
+            } => self.visit_stmt_class(name, methods, superclass),
         }
-        Ok(())
     }
 
     fn visit_expression(&mut self, expression: &Expr) -> Result<Literal, RuntimeError> {
@@ -159,7 +71,7 @@ impl Interpreter {
             }
             Expr::Variable { name } => match self.locals.get(expression) {
                 Some(distance) => self.graph.get_at(*distance, name)?,
-                None => self.graph.envs[0].get_literal(&name.lexeme),
+                None => self.graph.envs[0].get_literal(name)?,
             },
             Expr::Literal { value } => value.clone(),
             Expr::Grouping { expression } => self.visit_expression(expression)?,
@@ -289,7 +201,7 @@ impl Interpreter {
             }
             Expr::This { keyword } => match self.locals.get(expression) {
                 Some(distance) => self.graph.get_at(*distance, keyword)?,
-                None => self.graph.envs[0].get_literal(&keyword.lexeme),
+                None => self.graph.envs[0].get_literal(keyword)?,
             },
             Expr::Super { keyword, method } => {
                 let distance = self
@@ -299,7 +211,7 @@ impl Interpreter {
 
                 let superclass_literal = self.graph.get_at(*distance, keyword)?;
                 let superclass = superclass_literal.get_class().unwrap();
-                let token = Token::new(TokenType::Identifier, "this", Literal::Null, keyword.line);
+                let token = Token::new_this(keyword.line);
                 let instance = self.graph.get_at(distance + 1usize, &token)?;
                 let Literal::Class(instance) = instance else {
                     panic!("'this' not found at distance {distance}");
@@ -320,7 +232,7 @@ impl Interpreter {
         Ok(literal)
     }
 
-    pub fn execute_block(&mut self, statements: &Vec<Stmt>) -> Result<(), RuntimeError> {
+    pub fn execute_block(&mut self, statements: &[Stmt]) -> Result<(), RuntimeError> {
         for statement in statements {
             self.visit_statement(statement)?;
         }
@@ -329,5 +241,131 @@ impl Interpreter {
 
     pub fn resolve(&mut self, expr: &Expr, i: usize) {
         self.locals.insert(expr.clone(), i);
+    }
+
+    fn visit_stmt_expression(&mut self, expression: &Expr) -> Result<(), RuntimeError> {
+        self.visit_expression(expression)?;
+        Ok(())
+    }
+
+    fn visit_stmt_print(&mut self, expression: &Expr) -> Result<(), RuntimeError> {
+        match self.visit_expression(expression) {
+            Ok(value) => Ok(println!(">>> {value}")),
+            Err(e) => Err(e),
+        }
+    }
+
+    fn visit_stmt_var(&mut self, name: &Token, initializer: &Expr) -> Result<(), RuntimeError> {
+        let val = if initializer.is_null() {
+            Literal::Null
+        } else {
+            self.visit_expression(initializer)?
+        };
+        self.graph.define(&name.lexeme, val);
+        Ok(())
+    }
+
+    fn visit_stmt_block(&mut self, statements: &[Stmt]) -> Result<(), RuntimeError> {
+        self.graph.push(Environment::new());
+        self.execute_block(statements)?;
+        self.graph.pop();
+        Ok(())
+    }
+
+    fn visit_stmt_if(
+        &mut self,
+        condition: &Expr,
+        then_stmt: &Stmt,
+        else_stmt: &Option<Box<Stmt>>,
+    ) -> Result<(), RuntimeError> {
+        if self.visit_expression(condition)?.is_truthy() {
+            self.visit_statement(then_stmt)
+        } else if let Some(branch) = else_stmt {
+            self.visit_statement(branch)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn visit_stmt_while(&mut self, condition: &Expr, body: &Stmt) -> Result<(), RuntimeError> {
+        while self.visit_expression(condition)?.is_truthy() {
+            self.visit_statement(body)?
+        }
+        Ok(())
+    }
+
+    fn visit_stmt_fun(&mut self, declaration: &FunctionDeclaration) -> Result<(), RuntimeError> {
+        let dec = (*declaration).clone();
+        let closure = self.graph.change_last_to_closure();
+        let this_env = self
+            .graph
+            .envs
+            .iter()
+            .rev()
+            .find(|e| e.find_literal("this").is_some());
+        let closure_vec = if let Some(EnvironmentNode::Closure { env }) = this_env {
+            vec![Rc::clone(env), closure]
+        } else {
+            vec![closure]
+        };
+
+        let function = LoxFunction::new(dec, closure_vec, false);
+        let name = &declaration.name.lexeme;
+        self.graph.define(name, Literal::new_function(function));
+        Ok(())
+    }
+
+    fn visit_stmt_return(&mut self, value: &Expr) -> Result<(), RuntimeError> {
+        let value = self.visit_expression(value)?;
+        Err(RuntimeError::Return { value })
+    }
+
+    fn visit_stmt_class(
+        &mut self,
+        name: &Token,
+        methods: &[FunctionDeclaration],
+        superclass: &Option<Box<Expr>>,
+    ) -> Result<(), RuntimeError> {
+        let mut super_lox_class = None;
+        if let Some(sc) = superclass {
+            super_lox_class = self.visit_expression(sc)?.get_class();
+            if super_lox_class.is_none() {
+                return Err(RuntimeError::Error {
+                    line: name.line,
+                    msg: format!("Superclass of {} must be a class", name.lexeme),
+                });
+            }
+        }
+        self.graph.define(&name.lexeme, Literal::Null);
+
+        if let Some(ref sup_class) = super_lox_class {
+            self.graph.push(Environment::new());
+            let sp = Literal::new_class(sup_class.clone());
+            self.graph.define("super", sp);
+        }
+
+        let mut runtime_methods: HashMap<_, _> = Default::default();
+        let closure = self.graph.change_last_to_closure();
+        for method in methods {
+            let name = method.name.lexeme.clone();
+            let func = LoxFunction::new(
+                method.clone(),
+                vec![Rc::clone(&closure)],
+                method.name.lexeme == "init",
+            );
+            runtime_methods.insert(name, func);
+        }
+
+        let class = LoxClass::new(
+            name.lexeme.clone(),
+            super_lox_class.map(Box::new),
+            runtime_methods,
+        );
+
+        if superclass.is_some() {
+            self.graph.pop();
+        }
+        self.graph.assign(name, Literal::new_class(class))?;
+        Ok(())
     }
 }

@@ -322,7 +322,6 @@ impl<'a> Parser<'a> {
             }
         }
 
-        // println!("Equality expression {expr}");
         Ok(expr)
     }
 
@@ -338,7 +337,6 @@ impl<'a> Parser<'a> {
             }
         }
 
-        // println!("comparison expression {expr}");
         Ok(expr)
     }
 
@@ -354,7 +352,6 @@ impl<'a> Parser<'a> {
             }
         }
 
-        // println!("term expression {expr}");
         Ok(expr)
     }
 
@@ -370,7 +367,6 @@ impl<'a> Parser<'a> {
             }
         }
 
-        // println!("factor expression {expr}");
         Ok(expr)
     }
 
@@ -386,7 +382,6 @@ impl<'a> Parser<'a> {
             self.call()?
         };
 
-        // println!("unary expression {expr}");
         Ok(expr)
     }
 
@@ -441,7 +436,7 @@ impl<'a> Parser<'a> {
             })
         } else if self.match_type(Nil) {
             Ok(Expr::Literal {
-                value: Token::empty_literal(),
+                value: Literal::Null,
             })
         } else if self.match_types(vec![Number, Chars]) {
             Ok(Expr::Literal {
@@ -473,7 +468,6 @@ impl<'a> Parser<'a> {
 
     fn consume(&mut self, token_type: TokenType, msg: &str) -> Result<Token, ParseError> {
         if self.check(token_type) {
-            // self.advance();
             Ok(self.advance())
         } else {
             Err(self.error(self.peek(), msg))
@@ -482,10 +476,6 @@ impl<'a> Parser<'a> {
 
     fn error(&mut self, tok: Token, msg: &str) -> ParseError {
         self.lox.token_error(&tok, msg);
-        /*
-         *  In Lox it is returned a parse error here,
-         *  which is a static class that extends RuntimeException
-         */
         ParseError(tok, msg.to_owned())
     }
 

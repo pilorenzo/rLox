@@ -42,11 +42,19 @@ impl Environment {
         self.dict.insert(name, value);
     }
 
-    pub fn get_literal(&self, name: &str) -> Literal {
-        self.dict
-            .get(name)
-            .unwrap_or_else(|| panic!("No entry found for key '{name}'"))
-            .clone()
+    pub fn get_literal(&self, name: &Token) -> Result<Literal, RuntimeError> {
+        // self.dict
+        //     .get(name)
+        //     .unwrap_or_else(|| panic!("No entry found for key '{name}'"))
+        //     .clone()
+        let value = self.dict.get(&name.lexeme);
+        match value {
+            Some(v) => Ok(v.clone()),
+            None => Err(RuntimeError::Error {
+                line: name.line,
+                msg: format!("No entry found for key '{}'", name.lexeme),
+            }),
+        }
     }
 
     pub fn find_literal(&self, name: &str) -> Option<Literal> {
@@ -71,7 +79,7 @@ pub enum EnvironmentNode {
 }
 
 impl EnvironmentNode {
-    pub fn get_literal(&self, name: &str) -> Literal {
+    pub fn get_literal(&self, name: &Token) -> Result<Literal, RuntimeError> {
         match self {
             EnvironmentNode::Standard { env } => env.get_literal(name),
             EnvironmentNode::Closure { env } => env.borrow().get_literal(name),
@@ -166,20 +174,15 @@ impl EnvironmentGraph {
 
     pub fn push(&mut self, env: Environment) {
         self.envs.push(EnvironmentNode::Standard { env });
-        // println!("EnvironmentGraph after push:\n{}", self);
     }
 
     pub fn push_closure(&mut self, env: Environment) {
         let env = Rc::new(RefCell::new(env));
         self.envs.push(EnvironmentNode::Closure { env });
-        // println!("EnvironmentGraph after closure push:\n{}", self);
     }
 
     pub fn pop(&mut self) -> Option<EnvironmentNode> {
         self.envs.pop()
-        // let opt = self.envs.pop();
-        // println!("EnvironmentGraph after pop:\n{}", self);
-        // opt
     }
 
     pub fn define(&mut self, name: &str, value: Literal) {
@@ -209,23 +212,11 @@ impl EnvironmentGraph {
 
     pub fn get_at(&mut self, distance: usize, name: &Token) -> Result<Literal, RuntimeError> {
         match self.envs.get(distance) {
-            Some(env) => Ok(env.get_literal(&name.lexeme)),
-            None => {
-                // println!("\n\n###########################");
-                // let mut result = String::default();
-                // for (i, e) in self.envs.iter().enumerate() {
-                //     result += &format!("Environment {i}:\n{e}");
-                // }
-                // println!("{result}");
-                // println!("-------------------------------");
-                // println!("distance {distance}, envs {}", self.envs.len());
-                // println!("###########################\n\n");
-                // panic!("Can't get variable {name} in selected scope {distance}");
-                Err(RuntimeError::Error {
-                    line: name.line,
-                    msg: format!("Can't get variable {name} in selected scope {distance}"),
-                })
-            }
+            Some(env) => env.get_literal(name),
+            None => Err(RuntimeError::Error {
+                line: name.line,
+                msg: format!("Can't get variable {name} in selected scope {distance}"),
+            }),
         }
     }
 
