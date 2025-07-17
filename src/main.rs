@@ -83,7 +83,7 @@ impl Lox {
                 let full_text = buffer.clone() + &new_line;
                 self.run(&full_text);
                 if !self.had_error && !self.had_runtime_error {
-                    buffer.push_str(&new_line);
+                    buffer += &new_line;
                 }
             }
         }

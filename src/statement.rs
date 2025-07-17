@@ -73,17 +73,36 @@ impl Display for Stmt {
             Stmt::Expression { expression } => write!(f, "Expression {{ {expression} }}"),
             Stmt::Print { expression } => write!(f, "Print {{ {expression} }}"),
             Stmt::Var { name, initializer } => write!(f, "var {name} {{ {initializer} }}"),
-            Stmt::Block { statements } => write!(f, "Block {{ {statements:?} }}"),
+            Stmt::Block { statements } => {
+                let mut formatted_stmts = String::default();
+                for s in statements {
+                    formatted_stmts += format!("\n{s}").as_str();
+                }
+                write!(f, "Block {{ {formatted_stmts}\n }}")
+            }
             Stmt::Return { keyword: _, value } => write!(f, "Return {value}"),
-            Stmt::While { condition, body } => write!(f, "While {condition} {{ {body:?} }}"),
+            Stmt::While { condition, body } => write!(f, "While {condition} {{ {body} }}"),
             Stmt::If {
                 condition,
                 then_stmt,
                 else_stmt,
-            } => write!(f, "If {condition} then {then_stmt:?} else {else_stmt:?}"),
+            } => match else_stmt {
+                Some(else_stmt) => write!(f, "If {condition} then {then_stmt} else {else_stmt}"),
+                None => write!(f, "If {condition} then {then_stmt}"),
+            },
             Stmt::Fun { declaration } => {
                 let (name, params) = (&declaration.name, &declaration.params);
-                write!(f, "Function {name} ({params:?})")
+                let mut formatted = String::default();
+                for p in params {
+                    formatted += format!("{p},").as_str();
+                }
+                let formatted_params = if let Some(i) = formatted.rfind(',') {
+                    &formatted[..i]
+                } else {
+                    &formatted
+                };
+                // let formatted_params = &formatted[..formatted.rfind(',').unwrap()];
+                write!(f, "Function {name} ({formatted_params})")
             }
             Stmt::Class {
                 name,

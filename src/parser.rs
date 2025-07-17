@@ -25,6 +25,9 @@ impl<'a> Parser<'a> {
         while !self.is_at_end() {
             statements.push(self.declaration()?);
         }
+        // for stmt in &statements {
+        //     println!("{stmt}");
+        // }
         Ok(statements)
     }
 
@@ -321,7 +324,6 @@ impl<'a> Parser<'a> {
                 right: Box::new(right),
             }
         }
-
         Ok(expr)
     }
 
@@ -336,7 +338,6 @@ impl<'a> Parser<'a> {
                 right: Box::new(right),
             }
         }
-
         Ok(expr)
     }
 
@@ -351,7 +352,6 @@ impl<'a> Parser<'a> {
                 right: Box::new(right),
             }
         }
-
         Ok(expr)
     }
 
@@ -366,7 +366,6 @@ impl<'a> Parser<'a> {
                 right: Box::new(right),
             }
         }
-
         Ok(expr)
     }
 
@@ -381,7 +380,6 @@ impl<'a> Parser<'a> {
         } else {
             self.call()?
         };
-
         Ok(expr)
     }
 

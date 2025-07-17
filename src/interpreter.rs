@@ -60,176 +60,36 @@ impl Interpreter {
     }
 
     fn visit_expression(&mut self, expression: &Expr) -> Result<Literal, RuntimeError> {
-        let literal = match expression {
-            Expr::Assignment { name, value } => {
-                let value = self.visit_expression(value)?;
-                match self.locals.get(expression) {
-                    Some(distance) => self.graph.assign_at(distance, name, &value)?,
-                    None => self.graph.envs[0].assign_literal(name, &value).unwrap(),
-                }
-                value
-            }
-            Expr::Variable { name } => match self.locals.get(expression) {
-                Some(distance) => self.graph.get_at(*distance, name)?,
-                None => self.graph.envs[0].get_literal(name)?,
-            },
-            Expr::Literal { value } => value.clone(),
-            Expr::Grouping { expression } => self.visit_expression(expression)?,
-            Expr::Unary { operator, right } => {
-                let right = self.visit_expression(right)?;
-                match operator.t_type {
-                    TokenType::Bang => Literal::Boolean(!right.is_truthy()),
-                    TokenType::Minus => Literal::Numeric(-right.to_num(operator.line)?),
-                    _ => Literal::Null,
-                }
-            }
+        match expression {
+            Expr::Literal { value } => Ok(value.clone()),
+            Expr::Assignment { name, value } => self.visit_expr_assignment(expression, name, value),
+            Expr::Variable { name } => self.visit_expr_variable(expression, name),
+            Expr::Grouping { expression } => self.visit_expression(expression),
+            Expr::Unary { operator, right } => self.visit_expr_unary(operator, right),
             Expr::Binary {
                 left,
                 operator,
                 right,
-            } => {
-                let (right, left) = (self.visit_expression(right)?, self.visit_expression(left)?);
-                let l = operator.line;
-                match operator.t_type {
-                    TokenType::Greater => Literal::Boolean(left.to_num(l)? > right.to_num(l)?),
-                    TokenType::GreaterEqual => {
-                        Literal::Boolean(left.to_num(l)? >= right.to_num(l)?)
-                    }
-                    TokenType::Less => Literal::Boolean(left.to_num(l)? < right.to_num(l)?),
-                    TokenType::LessEqual => Literal::Boolean(left.to_num(l)? <= right.to_num(l)?),
-
-                    TokenType::EqualEqual => Literal::Boolean(left == right),
-                    TokenType::BangEqual => Literal::Boolean(left != right),
-
-                    TokenType::Minus => Literal::Numeric(left.to_num(l)? - right.to_num(l)?),
-                    TokenType::Slash => Literal::Numeric(left.to_num(l)? / right.to_num(l)?),
-                    TokenType::Star => Literal::Numeric(left.to_num(l)? * right.to_num(l)?),
-                    TokenType::Plus => match (&left, &right) {
-                        (Literal::Numeric(l), Literal::Numeric(r)) => Literal::Numeric(l + r),
-                        (Literal::Letters(l), Literal::Letters(r)) => {
-                            Literal::Letters(format!("{l}{r}"))
-                        }
-                        _ => {
-                            return Err(RuntimeError::Error {
-                                line: l,
-                                msg: format!("Can't add {right} to {left}"),
-                            })
-                        }
-                    },
-                    _ => Literal::Null,
-                }
-            }
+            } => self.visit_expr_binary(operator, left, right),
             Expr::Logical {
                 left,
                 operator,
                 right,
-            } => {
-                let left = self.visit_expression(left)?;
-                let mut result = None;
-                match operator.t_type {
-                    TokenType::Or => {
-                        if left.is_truthy() {
-                            result = Some(left);
-                        }
-                    }
-                    _ => {
-                        if !left.is_truthy() {
-                            result = Some(left);
-                        }
-                    }
-                };
-                match result {
-                    Some(left) => left,
-                    None => self.visit_expression(right)?,
-                }
-            }
+            } => self.visit_expr_logical(operator, left, right),
             Expr::Call {
                 callee,
                 paren,
                 args,
-            } => {
-                let callee = self.visit_expression(callee)?;
-                let mut arguments = Vec::<Literal>::new();
-                for arg in args {
-                    arguments.push(self.visit_expression(arg)?);
-                }
-                let Literal::Callable(function) = callee else {
-                    return Err(RuntimeError::Error {
-                        line: paren.line,
-                        msg: "Can only call function and classes".to_owned(),
-                    });
-                };
-                if arguments.len() != function.get_arity() {
-                    return Err(RuntimeError::Error {
-                        line: paren.line,
-                        msg: format!(
-                            "Expected {} arguments, got {}",
-                            function.get_arity(),
-                            arguments.len()
-                        ),
-                    });
-                }
-                function.call(self, arguments)?
-            }
-            Expr::Get { object, name } => {
-                let object = self.visit_expression(object)?;
-                if let Literal::Class(instance) = object {
-                    LoxInstance::get(instance, name)?
-                } else {
-                    return Err(RuntimeError::Error {
-                        line: name.line,
-                        msg: "Only instances have properties".to_owned(),
-                    });
-                }
-            }
+            } => self.visit_expr_call(callee, paren, args),
+            Expr::Get { object, name } => self.visit_expr_get(object, name),
             Expr::Set {
                 object,
                 name,
                 value,
-            } => {
-                let object = self.visit_expression(object)?;
-                if let Literal::Class(instance) = object {
-                    let value = self.visit_expression(value)?;
-                    instance.borrow_mut().set(name, &value);
-                    value
-                } else {
-                    return Err(RuntimeError::Error {
-                        line: name.line,
-                        msg: "Only instances have fields".to_owned(),
-                    });
-                }
-            }
-            Expr::This { keyword } => match self.locals.get(expression) {
-                Some(distance) => self.graph.get_at(*distance, keyword)?,
-                None => self.graph.envs[0].get_literal(keyword)?,
-            },
-            Expr::Super { keyword, method } => {
-                let distance = self
-                    .locals
-                    .get(expression)
-                    .expect("'super' expression not found in interpreter locals");
-
-                let superclass_literal = self.graph.get_at(*distance, keyword)?;
-                let superclass = superclass_literal.get_class().unwrap();
-                let token = Token::new_this(keyword.line);
-                let instance = self.graph.get_at(distance + 1usize, &token)?;
-                let Literal::Class(instance) = instance else {
-                    panic!("'this' not found at distance {distance}");
-                };
-
-                let func = superclass.find_method(&method.lexeme);
-
-                let Some(function) = func else {
-                    return Err(RuntimeError::Error {
-                        line: method.line,
-                        msg: format!("undefined property '{}'.", method.lexeme),
-                    });
-                };
-                let function = function.bind(instance);
-                Literal::new_function(function)
-            }
-        };
-        Ok(literal)
+            } => self.visit_expr_set(object, name, value),
+            Expr::This { keyword } => self.visit_expr_this(expression, keyword),
+            Expr::Super { keyword, method } => self.visit_expr_super(expression, keyword, method),
+        }
     }
 
     pub fn execute_block(&mut self, statements: &[Stmt]) -> Result<(), RuntimeError> {
@@ -267,8 +127,10 @@ impl Interpreter {
 
     fn visit_stmt_block(&mut self, statements: &[Stmt]) -> Result<(), RuntimeError> {
         self.graph.push(Environment::new());
+        println!("Pushed block");
         self.execute_block(statements)?;
         self.graph.pop();
+        println!("Popped block");
         Ok(())
     }
 
@@ -367,5 +229,197 @@ impl Interpreter {
         }
         self.graph.assign(name, Literal::new_class(class))?;
         Ok(())
+    }
+
+    fn visit_expr_assignment(
+        &mut self,
+        expression: &Expr,
+        name: &Token,
+        value: &Expr,
+    ) -> Result<Literal, RuntimeError> {
+        let value = self.visit_expression(value)?;
+        match self.locals.get(expression) {
+            Some(distance) => self.graph.assign_at(distance, name, &value)?,
+            None => self.graph.envs[0].assign_literal(name, &value).unwrap(),
+        }
+        Ok(value)
+    }
+
+    fn visit_expr_variable(
+        &mut self,
+        expression: &Expr,
+        name: &Token,
+    ) -> Result<Literal, RuntimeError> {
+        // println!("Trying to get {}", name.lexeme);
+        // println!("Interpreter {}", self);
+        match self.locals.get(expression) {
+            Some(distance) => self.graph.get_at(*distance, name),
+            None => self.graph.envs[0].get_literal(name),
+        }
+    }
+
+    fn visit_expr_unary(
+        &mut self,
+        operator: &Token,
+        right: &Expr,
+    ) -> Result<Literal, RuntimeError> {
+        let right = self.visit_expression(right)?;
+        Ok(match operator.t_type {
+            TokenType::Bang => Literal::Boolean(!right.is_truthy()),
+            TokenType::Minus => Literal::Numeric(-right.to_num(operator.line)?),
+            _ => Literal::Null,
+        })
+    }
+
+    fn visit_expr_binary(
+        &mut self,
+        operator: &Token,
+        left: &Expr,
+        right: &Expr,
+    ) -> Result<Literal, RuntimeError> {
+        let (right, left) = (self.visit_expression(right)?, self.visit_expression(left)?);
+        let l = operator.line;
+        let result = match operator.t_type {
+            TokenType::Greater => Literal::Boolean(left.to_num(l)? > right.to_num(l)?),
+            TokenType::GreaterEqual => Literal::Boolean(left.to_num(l)? >= right.to_num(l)?),
+            TokenType::Less => Literal::Boolean(left.to_num(l)? < right.to_num(l)?),
+            TokenType::LessEqual => Literal::Boolean(left.to_num(l)? <= right.to_num(l)?),
+
+            TokenType::EqualEqual => Literal::Boolean(left == right),
+            TokenType::BangEqual => Literal::Boolean(left != right),
+
+            TokenType::Minus => Literal::Numeric(left.to_num(l)? - right.to_num(l)?),
+            TokenType::Slash => Literal::Numeric(left.to_num(l)? / right.to_num(l)?),
+            TokenType::Star => Literal::Numeric(left.to_num(l)? * right.to_num(l)?),
+            TokenType::Plus => match (&left, &right) {
+                (Literal::Numeric(l), Literal::Numeric(r)) => Literal::Numeric(l + r),
+                (Literal::Letters(l), Literal::Letters(r)) => Literal::Letters(format!("{l}{r}")),
+                _ => {
+                    return Err(RuntimeError::Error {
+                        line: l,
+                        msg: format!("Can't add {right} to {left}"),
+                    })
+                }
+            },
+            _ => Literal::Null,
+        };
+        Ok(result)
+    }
+
+    fn visit_expr_logical(
+        &mut self,
+        operator: &Token,
+        left: &Expr,
+        right: &Expr,
+    ) -> Result<Literal, RuntimeError> {
+        let left = self.visit_expression(left)?;
+        if operator.t_type != TokenType::Or && left.is_truthy() {
+            self.visit_expression(right)
+        } else {
+            Ok(left)
+        }
+    }
+
+    fn visit_expr_call(
+        &mut self,
+        callee: &Expr,
+        paren: &Token,
+        args: &[Expr],
+    ) -> Result<Literal, RuntimeError> {
+        let callee = self.visit_expression(callee)?;
+        let mut arguments = vec![];
+        for arg in args {
+            arguments.push(self.visit_expression(arg)?);
+        }
+        let Literal::Callable(function) = callee else {
+            return Err(RuntimeError::Error {
+                line: paren.line,
+                msg: "Can only call function and classes".to_owned(),
+            });
+        };
+        // println!("function name {}", function);
+        // println!("function arity {}", function.get_arity());
+        // println!("function args {:?}", arguments);
+        let (lenght, arity) = (arguments.len(), function.get_arity());
+        if lenght != arity {
+            return Err(RuntimeError::Error {
+                line: paren.line,
+                msg: format!("Expected {} arguments, got {}", arity, lenght),
+            });
+        }
+        function.call(self, arguments)
+    }
+
+    fn visit_expr_get(&mut self, object: &Expr, name: &Token) -> Result<Literal, RuntimeError> {
+        let object = self.visit_expression(object)?;
+        if let Literal::Class(instance) = object {
+            LoxInstance::get(instance, name)
+        } else {
+            Err(RuntimeError::Error {
+                line: name.line,
+                msg: "Only instances have properties".to_owned(),
+            })
+        }
+    }
+
+    fn visit_expr_set(
+        &mut self,
+        object: &Expr,
+        name: &Token,
+        value: &Expr,
+    ) -> Result<Literal, RuntimeError> {
+        let object = self.visit_expression(object)?;
+        if let Literal::Class(instance) = object {
+            let value = self.visit_expression(value)?;
+            instance.borrow_mut().set(name, &value);
+            Ok(value)
+        } else {
+            Err(RuntimeError::Error {
+                line: name.line,
+                msg: "Only instances have fields".to_owned(),
+            })
+        }
+    }
+
+    fn visit_expr_this(
+        &mut self,
+        expression: &Expr,
+        keyword: &Token,
+    ) -> Result<Literal, RuntimeError> {
+        match self.locals.get(expression) {
+            Some(distance) => self.graph.get_at(*distance, keyword),
+            None => self.graph.envs[0].get_literal(keyword),
+        }
+    }
+
+    fn visit_expr_super(
+        &mut self,
+        expression: &Expr,
+        keyword: &Token,
+        method: &Token,
+    ) -> Result<Literal, RuntimeError> {
+        let distance = self
+            .locals
+            .get(expression)
+            .expect("'super' expression not found in interpreter locals");
+
+        let superclass_literal = self.graph.get_at(*distance, keyword)?;
+        let superclass = superclass_literal.get_class().unwrap();
+        let token = Token::new_this(keyword.line);
+        let instance = self.graph.get_at(distance + 1usize, &token)?;
+        let Literal::Class(instance) = instance else {
+            panic!("'this' not found at distance {distance}");
+        };
+
+        let func = superclass.find_method(&method.lexeme);
+
+        let Some(function) = func else {
+            return Err(RuntimeError::Error {
+                line: method.line,
+                msg: format!("undefined property '{}'.", method.lexeme),
+            });
+        };
+        let function = function.bind(instance);
+        Ok(Literal::new_function(function))
     }
 }

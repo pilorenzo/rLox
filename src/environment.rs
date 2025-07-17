@@ -43,10 +43,6 @@ impl Environment {
     }
 
     pub fn get_literal(&self, name: &Token) -> Result<Literal, RuntimeError> {
-        // self.dict
-        //     .get(name)
-        //     .unwrap_or_else(|| panic!("No entry found for key '{name}'"))
-        //     .clone()
         let value = self.dict.get(&name.lexeme);
         match value {
             Some(v) => Ok(v.clone()),
@@ -211,6 +207,7 @@ impl EnvironmentGraph {
     }
 
     pub fn get_at(&mut self, distance: usize, name: &Token) -> Result<Literal, RuntimeError> {
+        // println!("Getting {}: {}", name.lexeme, self);
         match self.envs.get(distance) {
             Some(env) => env.get_literal(name),
             None => Err(RuntimeError::Error {

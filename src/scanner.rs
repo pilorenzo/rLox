@@ -155,7 +155,6 @@ impl<'a> Scanner<'a> {
         chars.next_back();
 
         let val = chars.as_str().to_owned();
-        // println!("This is value!!!! {}\n", &value);
 
         self.add_token_with_literal(TokenType::Chars, Literal::Letters(val));
     }
