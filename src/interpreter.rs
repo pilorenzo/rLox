@@ -251,6 +251,7 @@ impl Interpreter {
         name: &Token,
     ) -> Result<Literal, RuntimeError> {
         // println!("Trying to get {}", name.lexeme);
+        // println!("In expression {}", expression);
         // println!("Interpreter {}", self);
         match self.locals.get(expression) {
             Some(distance) => self.graph.get_at(*distance, name),

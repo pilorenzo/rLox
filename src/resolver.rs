@@ -77,6 +77,7 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
     }
 
     fn visit_expression(&mut self, expr: &Expr) {
+        // println!("Expression {expr}");
         match expr {
             Expr::Variable { name } => self.visit_var_expression(expr, name),
             Expr::Literal { value: _ } => self.visit_literal_expression(),
@@ -125,10 +126,11 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
 
     fn visit_var(&mut self, name: &Token, initializer: &Expr) {
         self.declare(name);
-        if let Expr::Literal { value } = initializer {
-            if *value != Literal::Null {
-                self.visit_expression(initializer);
-            }
+        match initializer {
+            Expr::Literal {
+                value: Literal::Null,
+            } => {}
+            _ => self.visit_expression(initializer),
         }
         self.define(name);
     }
@@ -165,6 +167,7 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
     }
 
     fn resolve_local(&mut self, expr: &Expr, name: &Token) {
+        println!("Name {}, line {}", name.lexeme, name.line);
         let pos = self
             .scopes
             .iter()
@@ -174,6 +177,15 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
         if let Some(i) = pos {
             /* Index is different from book, because here global is environment 0 */
             let index = self.scopes.len() - i;
+            println!(
+                "Reversed pos {i}, Name {} Index {index}, Line {}, scopes len {}",
+                name.lexeme,
+                name.line,
+                self.scopes.len()
+            );
+            // println!("Index {index}");
+            // println!("Scopes len {}", self.scopes.len());
+
             self.interpreter.resolve(expr, index);
         }
     }
@@ -265,6 +277,7 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
     }
 
     fn visit_binary_expression(&mut self, left: &Expr, right: &Expr) {
+        // println!("Left {left} and right {right}");
         self.visit_expression(left);
         self.visit_expression(right);
     }

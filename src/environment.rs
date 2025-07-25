@@ -46,6 +46,7 @@ impl Environment {
         let value = self.dict.get(&name.lexeme);
         match value {
             Some(v) => Ok(v.clone()),
+            // None => panic!("no entry found for key '{}'", name.lexeme),
             None => Err(RuntimeError::Error {
                 line: name.line,
                 msg: format!("No entry found for key '{}'", name.lexeme),
@@ -208,8 +209,23 @@ impl EnvironmentGraph {
 
     pub fn get_at(&mut self, distance: usize, name: &Token) -> Result<Literal, RuntimeError> {
         // println!("Getting {}: {}", name.lexeme, self);
+        let distance = self.envs.len() - distance;
         match self.envs.get(distance) {
-            Some(env) => env.get_literal(name),
+            // Some(env) => env.get_literal(name),
+            Some(env) => {
+                let result = env.get_literal(name);
+                println!("Result {result:?}");
+                match result {
+                    Err(RuntimeError::Error { line, msg }) => Err(RuntimeError::Error {
+                        line,
+                        msg: format!("Graph {}", self)
+                            + &msg
+                            + "\ndistance "
+                            + &distance.to_string(),
+                    }),
+                    _ => result,
+                }
+            }
             None => Err(RuntimeError::Error {
                 line: name.line,
                 msg: format!("Can't get variable {name} in selected scope {distance}"),
@@ -229,7 +245,9 @@ impl EnvironmentGraph {
                 msg: format!("Can't assign value {v} to variable {t} in selected scope {d}"),
             })
         };
-        match self.envs.get_mut(*distance) {
+        let distance = self.envs.len() - distance;
+
+        match self.envs.get_mut(distance) {
             Some(env) => match env.assign_literal(token, value) {
                 Some(()) => Ok(()),
                 None => err(value, token, distance),

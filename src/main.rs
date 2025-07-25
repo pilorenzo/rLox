@@ -23,7 +23,7 @@ use token_type::Token;
 use token_type::*;
 
 fn main() -> Result<(), Error> {
-    // env::set_var("RUST_BACKTRACE", "1");
+    env::set_var("RUST_BACKTRACE", "1");
     let args: Vec<String> = env::args().collect();
     let mut lox = Lox::new();
     println!("Hello, world!");
@@ -113,6 +113,7 @@ impl Lox {
         }
         // println!("Resolved");
 
+        println!("Interpreter {interpreter}");
         for stmt in &statements {
             match interpreter.visit_statement(stmt) {
                 Ok(_) => continue,

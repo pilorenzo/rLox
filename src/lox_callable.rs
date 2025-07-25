@@ -73,11 +73,11 @@ impl LoxFunction {
         interpreter: &mut Interpreter,
         arguments: Vec<Literal>,
     ) -> Result<Literal, RuntimeError> {
-        println!("function name {}", self.declaration.name);
-        println!("function arity {}", self.declaration.params.len());
-        println!("function args {:?}", arguments);
-
-        println!("Interpreter before {interpreter}");
+        // println!("function name {}", self.declaration.name);
+        // println!("function arity {}", self.declaration.params.len());
+        // println!("function args {:?}", arguments);
+        //
+        // println!("Interpreter before {interpreter}");
         let mut closure_count = 0usize;
         for clos in self.closures.iter() {
             if !LoxFunction::is_in_graph(interpreter, clos) {
@@ -87,12 +87,12 @@ impl LoxFunction {
                 closure_count += 1;
             }
         }
-        println!("Interpreter after {interpreter}");
+        // println!("Interpreter after {interpreter}");
 
         interpreter.graph.push(Environment::new());
         for (param, arg) in self.declaration.params.iter().zip(arguments.iter()) {
-            println!("param {param}");
-            println!("arg {arg}");
+            // println!("param {param}");
+            // println!("arg {arg}");
             interpreter.graph.define(&param.lexeme, arg.clone())
         }
 
