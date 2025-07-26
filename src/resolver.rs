@@ -125,6 +125,7 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
     }
 
     fn visit_var(&mut self, name: &Token, initializer: &Expr) {
+        println!("token declared {name}");
         self.declare(name);
         match initializer {
             Expr::Literal {
@@ -167,7 +168,7 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
     }
 
     fn resolve_local(&mut self, expr: &Expr, name: &Token) {
-        println!("Name {}, line {}", name.lexeme, name.line);
+        // println!("Name {}, line {}", name.lexeme, name.line);
         let pos = self
             .scopes
             .iter()
@@ -186,7 +187,7 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
             // println!("Index {index}");
             // println!("Scopes len {}", self.scopes.len());
 
-            self.interpreter.resolve(expr, index);
+            self.interpreter.resolve(expr, i);
         }
     }
 
@@ -229,18 +230,25 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
             let line = keyword.line;
             self.lox.error(line, "Can't return from top-level code.");
         }
-        match value {
-            Expr::Literal {
-                value: Literal::Null,
-            } => {}
-            _ => {
-                if let FunctionType::Initializer = self.current_function {
-                    let message = "Can't return value from initializer";
-                    self.lox.error(keyword.line, message);
-                }
-                self.visit_expression(value);
+        if !value.is_null() {
+            if let FunctionType::Initializer = self.current_function {
+                let message = "Can't return value from initializer";
+                self.lox.error(keyword.line, message);
             }
+            self.visit_expression(value);
         }
+        // match value {
+        //     Expr::Literal {
+        //         value: Literal::Null,
+        //     } => {}
+        //     _ => {
+        //         if let FunctionType::Initializer = self.current_function {
+        //             let message = "Can't return value from initializer";
+        //             self.lox.error(keyword.line, message);
+        //         }
+        //         self.visit_expression(value);
+        //     }
+        // }
     }
 
     fn visit_while(&mut self, condition: &Expr, body: &Stmt) {

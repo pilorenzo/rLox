@@ -72,7 +72,9 @@ impl Display for Stmt {
         match self {
             Stmt::Expression { expression } => write!(f, "Expression {{ {expression} }}"),
             Stmt::Print { expression } => write!(f, "Print {{ {expression} }}"),
-            Stmt::Var { name, initializer } => write!(f, "var {name} {{ {initializer} }}"),
+            Stmt::Var { name, initializer } => {
+                write!(f, "var {name}= {initializer}")
+            }
             Stmt::Block { statements } => {
                 let mut formatted_stmts = String::default();
                 for s in statements {

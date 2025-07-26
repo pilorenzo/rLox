@@ -37,6 +37,14 @@ impl Interpreter {
         }
     }
 
+    fn print_locals(&self) -> String {
+        let mut result = String::default();
+        for (k, v) in self.locals.iter() {
+            result += &format!("Locals {k}: {v}\n");
+        }
+        result
+    }
+
     pub fn visit_statement(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
         match stmt {
             Stmt::Expression { expression } => self.visit_stmt_expression(expression),
@@ -250,7 +258,8 @@ impl Interpreter {
         expression: &Expr,
         name: &Token,
     ) -> Result<Literal, RuntimeError> {
-        // println!("Trying to get {}", name.lexeme);
+        // println!("Trying to get {}", name);
+        // println!("Locals\n{}", self.print_locals());
         // println!("In expression {}", expression);
         // println!("Interpreter {}", self);
         match self.locals.get(expression) {

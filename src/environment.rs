@@ -209,12 +209,12 @@ impl EnvironmentGraph {
 
     pub fn get_at(&mut self, distance: usize, name: &Token) -> Result<Literal, RuntimeError> {
         // println!("Getting {}: {}", name.lexeme, self);
-        let distance = self.envs.len() - distance;
+        let distance = self.envs.len() - 1 - distance;
         match self.envs.get(distance) {
             // Some(env) => env.get_literal(name),
             Some(env) => {
                 let result = env.get_literal(name);
-                println!("Result {result:?}");
+                // println!("Result {result:?}");
                 match result {
                     Err(RuntimeError::Error { line, msg }) => Err(RuntimeError::Error {
                         line,
@@ -245,7 +245,7 @@ impl EnvironmentGraph {
                 msg: format!("Can't assign value {v} to variable {t} in selected scope {d}"),
             })
         };
-        let distance = self.envs.len() - distance;
+        let distance = self.envs.len() - 1 - distance;
 
         match self.envs.get_mut(distance) {
             Some(env) => match env.assign_literal(token, value) {

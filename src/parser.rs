@@ -150,7 +150,17 @@ impl<'a> Parser<'a> {
         };
 
         let condition = if !self.check(Semicolon) {
-            self.expression()?
+            let mut expr = self.expression()?;
+            expr.decrement_line();
+            expr
+            // println!("Expression to print here hafubofbobfouawbouggaourbgouaerbgoergear\n{expr}");
+            // match expr {
+            //     Expr::Assignment { mut name, value } => {
+            //         name.line -= 1;
+            //         Expr::Assignment { name, value }
+            //     }
+            //     _ => expr,
+            // }
         } else {
             /* if no condition, loops continuously */
             Expr::Literal {
@@ -171,14 +181,13 @@ impl<'a> Parser<'a> {
         let mut body = self.statement()?;
 
         if let Some(expr) = increment {
-            body = Stmt::Block {
-                statements: vec![
-                    body,
-                    Stmt::Expression {
-                        expression: Box::new(expr),
-                    },
-                ],
+            let Stmt::Block { mut statements } = body else {
+                panic!("Body of for not found");
             };
+            statements.push(Stmt::Expression {
+                expression: Box::new(expr),
+            });
+            body = Stmt::Block { statements };
         }
 
         body = Stmt::While {
@@ -191,6 +200,7 @@ impl<'a> Parser<'a> {
                 statements: vec![stmt, body],
             };
         }
+        // println!("for desugarised {body}");
 
         Ok(body)
     }
@@ -218,7 +228,9 @@ impl<'a> Parser<'a> {
         let condition = Box::new(self.expression()?);
         self.consume(RightParen, "Expect ')' after while condition.")?;
         let body = Box::new(self.statement()?);
-        Ok(Stmt::While { condition, body })
+        let while_stm = Stmt::While { condition, body };
+        // println!("While \n {while_stm}");
+        Ok(while_stm)
     }
 
     fn block(&mut self) -> Result<Vec<Stmt>, ParseError> {

@@ -103,6 +103,11 @@ impl Lox {
             return;
         };
         // println!("Parsed");
+        println!("Parsed file");
+        for stmt in statements.iter() {
+            println!("{stmt}");
+        }
+        println!("\n\n\n\n\n");
 
         let mut interpreter = Interpreter::new();
         let mut resolver = Resolver::new(&mut interpreter, self);
