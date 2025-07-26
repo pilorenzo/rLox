@@ -37,13 +37,13 @@ impl Interpreter {
         }
     }
 
-    fn print_locals(&self) -> String {
-        let mut result = String::default();
-        for (k, v) in self.locals.iter() {
-            result += &format!("Locals {k}: {v}\n");
-        }
-        result
-    }
+    // fn print_locals(&self) -> String {
+    //     let mut result = String::default();
+    //     for (k, v) in self.locals.iter() {
+    //         result += &format!("Locals {k}: {v}\n");
+    //     }
+    //     result
+    // }
 
     pub fn visit_statement(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
         match stmt {
@@ -416,7 +416,7 @@ impl Interpreter {
         let superclass_literal = self.graph.get_at(*distance, keyword)?;
         let superclass = superclass_literal.get_class().unwrap();
         let token = Token::new_this(keyword.line);
-        let instance = self.graph.get_at(distance + 1usize, &token)?;
+        let instance = self.graph.get_at(distance - 1usize, &token)?;
         let Literal::Class(instance) = instance else {
             panic!("'this' not found at distance {distance}");
         };
