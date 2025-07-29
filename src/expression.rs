@@ -1,4 +1,4 @@
-use crate::token_type::Literal;
+use crate::literal::Literal;
 use std::fmt::{Debug, Display};
 
 use crate::Token;
@@ -94,6 +94,13 @@ impl Display for Expr {
     }
 }
 
+/*
+ *  Needed to allow the use of Expr as hashmap's key for the interpreter locals.
+ *  This is bad, since Expr may contain Literals that may contain floats,
+ *  and floats are not good keys.
+ *  It will be better to store an id in the expr and use it for hashing.
+ *  Anyway, if I understood correctly the Java implementation does the same.
+ */
 impl Eq for Expr {}
 
 impl Expr {
@@ -113,7 +120,7 @@ impl Expr {
      *   for(var i = 0; i < 2; i = i +1){...}
      *   since the condition and the increment are in
      *   the same line (and since I'm not using an id
-     *   to identify the expression, which I definitely should)
+     *   to identify the expression, which, again,  I definitely should)
      *   the resolver overwrites the interpreter.locals value associated
      *   with the key that correspond to i (that is, the distance to the scopes in
      *   which the local is).
@@ -128,7 +135,7 @@ impl Expr {
      *   and, since the condition and the increment are in different scopes,
      *   the interpreter can't find "i" when interpreting the condition.
      *   This method change the line of the condition so that 2 locals are
-     *   stored in the interpreter's HashMap
+     *   stored in the interpreter's HashMap, as it should be.
      */
     pub fn decrement_line(&mut self) {
         match self {
@@ -193,14 +200,3 @@ impl Expr {
         }
     }
 }
-
-//     if let Expr::Literal { value } = self {
-//         if let Literal::Null = value {
-//             true
-//         } else {
-//             false
-//         }
-//     } else {
-//         false
-//     }
-// }

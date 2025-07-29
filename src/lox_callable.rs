@@ -6,11 +6,73 @@ use std::hash::Hash;
 use std::ptr::{self};
 use std::rc::Rc;
 
-use crate::environment::EnvironmentNode;
+use crate::environment::EnvironmentType;
 use crate::interpreter::Interpreter;
 use crate::runtime_error::RuntimeError;
 use crate::token_type::Token;
-use crate::{environment::Environment, statement::FunctionDeclaration, Literal};
+use crate::{environment::Environment, literal::Literal, statement::FunctionDeclaration};
+
+#[derive(Debug, Clone, PartialEq, Hash)]
+pub enum LoxCallable {
+    Anonymous {
+        arity: usize,
+        func: fn(Vec<Literal>) -> Literal,
+    },
+    Function {
+        function: LoxFunction,
+    },
+    Class {
+        class: LoxClass,
+    },
+}
+
+impl LoxCallable {
+    pub fn get_arity(&self) -> usize {
+        match self {
+            LoxCallable::Anonymous { arity, func: _ } => *arity,
+            LoxCallable::Function { function } => function.declaration.params.len(),
+            LoxCallable::Class { class } => {
+                if let Some(function) = class.find_method("init") {
+                    function.declaration.params.len()
+                } else {
+                    0
+                }
+            }
+        }
+    }
+
+    pub fn call(
+        &self,
+        interpreter: &mut Interpreter,
+        arguments: Vec<Literal>,
+    ) -> Result<Literal, RuntimeError> {
+        match self {
+            LoxCallable::Anonymous { arity: _, func } => Ok((func)(arguments)),
+            LoxCallable::Function { function } => function.call(interpreter, arguments),
+            LoxCallable::Class { class } => class.call(interpreter, arguments),
+        }
+    }
+}
+
+impl Display for LoxCallable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LoxCallable::Anonymous { arity: _, func: _ } => write!(f, "<anonymous function>"),
+            LoxCallable::Function { function } => {
+                let name = &function.declaration.name.lexeme;
+                write!(f, "<fn {name}>")
+            }
+            LoxCallable::Class { class } => write!(f, "class {}", class.name.0),
+        }
+    }
+}
+
+/*
+*   LoxFunction stores a Vec with all the environments needed to execute call().
+*   Inside call() the environments not present in the interpreter are first pushed
+*   and then popped (after the function body is executed).
+*   This is due to the way the EnvironmentGraph is designed (see environment.rs).
+*/
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoxFunction {
@@ -33,7 +95,7 @@ impl LoxFunction {
 
     fn is_in_graph(interpreter: &Interpreter, closure: &Rc<RefCell<Environment>>) -> bool {
         for environment in interpreter.graph.envs.iter() {
-            if let EnvironmentNode::Closure { env } = environment {
+            if let EnvironmentType::Closure { env } = environment {
                 if ptr::eq(&*env.borrow(), &*closure.borrow()) {
                     return true;
                 }
@@ -73,26 +135,18 @@ impl LoxFunction {
         interpreter: &mut Interpreter,
         arguments: Vec<Literal>,
     ) -> Result<Literal, RuntimeError> {
-        // println!("function name {}", self.declaration.name);
-        // println!("function arity {}", self.declaration.params.len());
-        // println!("function args {:?}", arguments);
-        //
-        // println!("Interpreter before {interpreter}");
         let mut closure_count = 0usize;
         for clos in self.closures.iter() {
             if !LoxFunction::is_in_graph(interpreter, clos) {
-                interpreter.graph.envs.push(EnvironmentNode::Closure {
+                interpreter.graph.envs.push(EnvironmentType::Closure {
                     env: Rc::clone(clos),
                 });
                 closure_count += 1;
             }
         }
-        // println!("Interpreter after {interpreter}");
 
         interpreter.graph.push(Environment::new());
         for (param, arg) in self.declaration.params.iter().zip(arguments.iter()) {
-            // println!("param {param}");
-            // println!("arg {arg}");
             interpreter.graph.define(&param.lexeme, arg.clone())
         }
 
@@ -132,20 +186,6 @@ impl Hash for LoxFunction {
 
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct ClassName(pub String);
-
-#[derive(Debug, Clone, PartialEq, Hash)]
-pub enum LoxCallable {
-    Anonymous {
-        arity: usize,
-        func: fn(Vec<Literal>) -> Literal,
-    },
-    Function {
-        function: LoxFunction,
-    },
-    Class {
-        class: LoxClass,
-    },
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoxClass {
@@ -192,47 +232,6 @@ impl LoxClass {
 impl Hash for LoxClass {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.name.hash(state);
-    }
-}
-
-impl LoxCallable {
-    pub fn get_arity(&self) -> usize {
-        match self {
-            LoxCallable::Anonymous { arity, func: _ } => *arity,
-            LoxCallable::Function { function } => function.declaration.params.len(),
-            LoxCallable::Class { class } => {
-                if let Some(function) = class.find_method("init") {
-                    function.declaration.params.len()
-                } else {
-                    0
-                }
-            }
-        }
-    }
-
-    pub fn call(
-        &self,
-        interpreter: &mut Interpreter,
-        arguments: Vec<Literal>,
-    ) -> Result<Literal, RuntimeError> {
-        match self {
-            LoxCallable::Anonymous { arity: _, func } => Ok((func)(arguments)),
-            LoxCallable::Function { function } => function.call(interpreter, arguments),
-            LoxCallable::Class { class } => class.call(interpreter, arguments),
-        }
-    }
-}
-
-impl Display for LoxCallable {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            LoxCallable::Anonymous { arity: _, func: _ } => write!(f, "<anonymous function>"),
-            LoxCallable::Function { function } => {
-                let name = &function.declaration.name.lexeme;
-                write!(f, "<fn {name}>")
-            }
-            LoxCallable::Class { class } => write!(f, "class {}", class.name.0),
-        }
     }
 }
 

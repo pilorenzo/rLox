@@ -2,12 +2,14 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::rc::Rc;
 
-use crate::environment::{EnvironmentGraph, EnvironmentNode};
+use crate::environment::{EnvironmentGraph, EnvironmentType};
 use crate::lox_callable::{LoxClass, LoxFunction, LoxInstance};
 use crate::runtime_error::RuntimeError;
 use crate::statement::FunctionDeclaration;
 use crate::token_type::Token;
-use crate::{environment::Environment, expression::Expr, statement::Stmt, Literal, TokenType};
+use crate::{
+    environment::Environment, expression::Expr, literal::Literal, statement::Stmt, TokenType,
+};
 
 pub struct Interpreter {
     pub graph: EnvironmentGraph,
@@ -36,14 +38,6 @@ impl Interpreter {
             locals: Default::default(),
         }
     }
-
-    // fn print_locals(&self) -> String {
-    //     let mut result = String::default();
-    //     for (k, v) in self.locals.iter() {
-    //         result += &format!("Locals {k}: {v}\n");
-    //     }
-    //     result
-    // }
 
     pub fn visit_statement(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
         match stmt {
@@ -118,7 +112,7 @@ impl Interpreter {
 
     fn visit_stmt_print(&mut self, expression: &Expr) -> Result<(), RuntimeError> {
         match self.visit_expression(expression) {
-            Ok(value) => Ok(println!(">>> {value}")),
+            Ok(value) => Ok(println!("{value}")),
             Err(e) => Err(e),
         }
     }
@@ -135,10 +129,8 @@ impl Interpreter {
 
     fn visit_stmt_block(&mut self, statements: &[Stmt]) -> Result<(), RuntimeError> {
         self.graph.push(Environment::new());
-        println!("Pushed block");
         self.execute_block(statements)?;
         self.graph.pop();
-        println!("Popped block");
         Ok(())
     }
 
@@ -173,7 +165,7 @@ impl Interpreter {
             .iter()
             .rev()
             .find(|e| e.find_literal("this").is_some());
-        let closure_vec = if let Some(EnvironmentNode::Closure { env }) = this_env {
+        let closure_vec = if let Some(EnvironmentType::Closure { env }) = this_env {
             vec![Rc::clone(env), closure]
         } else {
             vec![closure]
@@ -258,10 +250,6 @@ impl Interpreter {
         expression: &Expr,
         name: &Token,
     ) -> Result<Literal, RuntimeError> {
-        // println!("Trying to get {}", name);
-        // println!("Locals\n{}", self.print_locals());
-        // println!("In expression {}", expression);
-        // println!("Interpreter {}", self);
         match self.locals.get(expression) {
             Some(distance) => self.graph.get_at(*distance, name),
             None => self.graph.envs[0].get_literal(name),
@@ -347,9 +335,6 @@ impl Interpreter {
                 msg: "Can only call function and classes".to_owned(),
             });
         };
-        // println!("function name {}", function);
-        // println!("function arity {}", function.get_arity());
-        // println!("function args {:?}", arguments);
         let (lenght, arity) = (arguments.len(), function.get_arity());
         if lenght != arity {
             return Err(RuntimeError::Error {

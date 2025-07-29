@@ -1,6 +1,7 @@
 mod environment;
 mod expression;
 mod interpreter;
+mod literal;
 mod lox_callable;
 mod parser;
 mod resolver;
@@ -26,8 +27,8 @@ fn main() -> Result<(), Error> {
     env::set_var("RUST_BACKTRACE", "1");
     let args: Vec<String> = env::args().collect();
     let mut lox = Lox::new();
-    println!("Hello, world!");
-    println!();
+    // println!("Hello, world!");
+    // println!();
     match args.len() {
         3.. => Err(Error::new(io::ErrorKind::Other, "Usage: rlox <<script>>")),
         2 => lox.run_file(args.get(1).unwrap()),
@@ -65,6 +66,8 @@ impl Lox {
      *  This prompt runs all the code written in the previous iterations.
      *  This means that if you print something, the print will be repeated
      *  in every successive iteration.
+     *  I've added a check to prevent this behavior in the most common case
+     *  (i.e. in a line that contains only a print).
      *  Should rewrite run() to return the state of the lox program
      *  and interpret only the last line inserted.
      */
@@ -83,7 +86,18 @@ impl Lox {
                 let full_text = buffer.clone() + &new_line;
                 self.run(&full_text);
                 if !self.had_error && !self.had_runtime_error {
-                    buffer += &new_line;
+                    let lines: Vec<String> = new_line
+                        .split(';')
+                        .map(|l| format!("{};\n", l))
+                        .filter(|l| {
+                            !((l.trim_start().starts_with("print") && l.trim_end().ends_with(";"))
+                                || l.trim().is_empty()
+                                || l.trim() == ";")
+                        })
+                        .collect();
+                    for l in lines {
+                        buffer += &l;
+                    }
                 }
             }
         }
@@ -98,16 +112,11 @@ impl Lox {
         let parse_result = Parser::new(self, tokens).parse();
         let Ok(statements) = parse_result else {
             let error_msg = parse_result.unwrap_err();
-            println!("ParseError [line: {}] {}", error_msg.0, error_msg.1);
+            eprintln!("ParseError [line: {}] {}", error_msg.0, error_msg.1);
             self.had_error = true;
             return;
         };
         // println!("Parsed");
-        println!("Parsed file");
-        for stmt in statements.iter() {
-            println!("{stmt}");
-        }
-        println!("\n\n\n\n\n");
 
         let mut interpreter = Interpreter::new();
         let mut resolver = Resolver::new(&mut interpreter, self);
@@ -118,7 +127,6 @@ impl Lox {
         }
         // println!("Resolved");
 
-        println!("Interpreter {interpreter}");
         for stmt in &statements {
             match interpreter.visit_statement(stmt) {
                 Ok(_) => continue,

@@ -1,7 +1,7 @@
 use crate::statement::{FunctionDeclaration, Stmt};
 use crate::token_type::TokenType::*;
 use crate::{expression::Expr, token_type::Token, TokenType};
-use crate::{Literal, Lox};
+use crate::{literal::Literal, Lox};
 
 pub struct Parser<'a> {
     pub lox: &'a mut Lox,
@@ -25,9 +25,6 @@ impl<'a> Parser<'a> {
         while !self.is_at_end() {
             statements.push(self.declaration()?);
         }
-        // for stmt in &statements {
-        //     println!("{stmt}");
-        // }
         Ok(statements)
     }
 
@@ -153,14 +150,6 @@ impl<'a> Parser<'a> {
             let mut expr = self.expression()?;
             expr.decrement_line();
             expr
-            // println!("Expression to print here hafubofbobfouawbouggaourbgouaerbgoergear\n{expr}");
-            // match expr {
-            //     Expr::Assignment { mut name, value } => {
-            //         name.line -= 1;
-            //         Expr::Assignment { name, value }
-            //     }
-            //     _ => expr,
-            // }
         } else {
             /* if no condition, loops continuously */
             Expr::Literal {
@@ -200,8 +189,6 @@ impl<'a> Parser<'a> {
                 statements: vec![stmt, body],
             };
         }
-        // println!("for desugarised {body}");
-
         Ok(body)
     }
 
@@ -229,7 +216,6 @@ impl<'a> Parser<'a> {
         self.consume(RightParen, "Expect ')' after while condition.")?;
         let body = Box::new(self.statement()?);
         let while_stm = Stmt::While { condition, body };
-        // println!("While \n {while_stm}");
         Ok(while_stm)
     }
 

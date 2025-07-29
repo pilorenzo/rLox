@@ -1,7 +1,6 @@
+use crate::literal::Literal;
 use std::fmt::Debug;
 use std::fmt::Display;
-
-use crate::Literal;
 
 #[derive(Debug)]
 pub enum RuntimeError {

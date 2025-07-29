@@ -1,4 +1,4 @@
-use crate::{Literal, Lox, Token, TokenType};
+use crate::{literal::Literal, Lox, Token, TokenType};
 use std::char;
 
 pub struct Scanner<'a> {

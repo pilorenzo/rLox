@@ -3,9 +3,10 @@ use std::{collections::HashMap, fmt::Display};
 use crate::{
     expression::Expr,
     interpreter::Interpreter,
+    literal::Literal,
     statement::{FunctionDeclaration, Stmt},
     token_type::Token,
-    Literal, Lox,
+    Lox,
 };
 
 #[derive(Clone, Copy)]
@@ -77,7 +78,6 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
     }
 
     fn visit_expression(&mut self, expr: &Expr) {
-        // println!("Expression {expr}");
         match expr {
             Expr::Variable { name } => self.visit_var_expression(expr, name),
             Expr::Literal { value: _ } => self.visit_literal_expression(),
@@ -125,7 +125,6 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
     }
 
     fn visit_var(&mut self, name: &Token, initializer: &Expr) {
-        println!("token declared {name}");
         self.declare(name);
         match initializer {
             Expr::Literal {
@@ -168,7 +167,6 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
     }
 
     fn resolve_local(&mut self, expr: &Expr, name: &Token) {
-        // println!("Name {}, line {}", name.lexeme, name.line);
         let pos = self
             .scopes
             .iter()
@@ -176,17 +174,6 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
             .position(|s| s.contains_key(&name.lexeme));
 
         if let Some(i) = pos {
-            /* Index is different from book, because here global is environment 0 */
-            let index = self.scopes.len() - i;
-            println!(
-                "Reversed pos {i}, Name {} Index {index}, Line {}, scopes len {}",
-                name.lexeme,
-                name.line,
-                self.scopes.len()
-            );
-            // println!("Index {index}");
-            // println!("Scopes len {}", self.scopes.len());
-
             self.interpreter.resolve(expr, i);
         }
     }
@@ -237,18 +224,6 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
             }
             self.visit_expression(value);
         }
-        // match value {
-        //     Expr::Literal {
-        //         value: Literal::Null,
-        //     } => {}
-        //     _ => {
-        //         if let FunctionType::Initializer = self.current_function {
-        //             let message = "Can't return value from initializer";
-        //             self.lox.error(keyword.line, message);
-        //         }
-        //         self.visit_expression(value);
-        //     }
-        // }
     }
 
     fn visit_while(&mut self, condition: &Expr, body: &Stmt) {
@@ -285,7 +260,6 @@ impl<'lox, 'int> Resolver<'lox, 'int> {
     }
 
     fn visit_binary_expression(&mut self, left: &Expr, right: &Expr) {
-        // println!("Left {left} and right {right}");
         self.visit_expression(left);
         self.visit_expression(right);
     }

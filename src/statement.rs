@@ -103,7 +103,6 @@ impl Display for Stmt {
                 } else {
                     &formatted
                 };
-                // let formatted_params = &formatted[..formatted.rfind(',').unwrap()];
                 write!(f, "Function {name} ({formatted_params})")
             }
             Stmt::Class {
