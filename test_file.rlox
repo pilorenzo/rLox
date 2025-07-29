@@ -1,0 +1,41 @@
+fun fib(n) {
+    if (n <= 1) return n;
+    var prev2 = n - 2;
+    var prev1 = n - 1;
+    return fib(prev2) + fib(prev1);
+}
+
+
+for (var i = 0; i < 15; i = i + 1) {
+    print fib(i);
+}
+
+
+class Doughnut {
+  cook() {
+    print "Fry until golden brown.";
+  }
+}
+
+class BostonCream < Doughnut {
+  cook() {
+    super.cook();
+    print "Pipe full of custard and coat with chocolate.";
+  }
+}
+
+BostonCream().cook();
+
+
+
+class Cake {
+  taste() {
+    var adjective = "delicious";
+    print "The " + this.flavor + " cake is " + adjective + "!";
+  }
+}
+
+var cake = Cake();
+cake.flavor = "German chocolate";
+cake.taste(); // Prints "The German chocolate cake is delicious!".
+

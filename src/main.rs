@@ -64,10 +64,8 @@ impl Lox {
 
     /*
      *  This prompt runs all the code written in the previous iterations.
-     *  This means that if you print something, the print will be repeated
-     *  in every successive iteration.
-     *  I've added a check to prevent this behavior in the most common case
-     *  (i.e. in a line that contains only a print).
+     *  I've added some code that makes the 'print' run only once, but this
+     *  prevents some 'print' to show up if are defined inside a function and called later.
      *  Should rewrite run() to return the state of the lox program
      *  and interpret only the last line inserted.
      */
@@ -88,12 +86,12 @@ impl Lox {
                 if !self.had_error && !self.had_runtime_error {
                     let lines: Vec<String> = new_line
                         .split(';')
-                        .map(|l| format!("{};\n", l))
                         .filter(|l| {
-                            !((l.trim_start().starts_with("print") && l.trim_end().ends_with(";"))
+                            !(l.trim_start().starts_with("print")
                                 || l.trim().is_empty()
                                 || l.trim() == ";")
                         })
+                        .map(|l| format!("{};", l))
                         .collect();
                     for l in lines {
                         buffer += &l;
