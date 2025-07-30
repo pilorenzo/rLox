@@ -2,7 +2,6 @@
 ## <center> A Lox interpreter written in Rust </center>
 </div>
 
----
 
 
 This is a Rust port of the Lox interpreter.
@@ -13,7 +12,6 @@ There are no particular differences to the original version of the interpreter, 
 
 ## Usage
 
----
 
 You can interpret a file passing the path to the file after the executable 
 (you can copy the file `test_file.rlox` in this repo).
